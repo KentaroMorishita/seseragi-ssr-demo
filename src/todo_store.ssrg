@@ -1,3 +1,4 @@
+import * as effects from "std/effect"
 import * as sqlite from "sqlite"
 import { FileConfig, Statement } from "sqlite"
 import { Todo } from "ui"
@@ -11,6 +12,9 @@ pub struct TodoById {
   database: sqlite.Database,
   id: Int,
 }
+
+fn databaseFailure _error: sqlite.Error -> String =
+  "SQLite operation failed"
 
 fn statement sql: String -> values: Array<sqlite.Value> -> Statement =
   Statement { sql: sql, values: values }
@@ -31,80 +35,109 @@ fn todoDecoder -> sqlite.Decoder<Todo> =
     (sqlite.map2 todoStart (sqlite.int "id") (sqlite.string "title"))
     (sqlite.bool "completed")
 
+pub fn succeed<A> value: A
+  -> Effect<{ sqlite: sqlite.Sqlite }, String, A> =
+  sqlite.succeed value
+  |> effects.mapError databaseFailure
+
 pub effect fn openDatabase -> sqlite.Database
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
-    database <- sqlite.openFile (FileConfig {
-      filename: "/tmp/seseragi-ssr-demo.sqlite",
-      readOnly: False,
-      create: True,
-      busyTimeoutMillis: 1000,
-    })
-    _ <- sqlite.execute database (
-      statement
-        "create table if not exists todos (id integer primary key autoincrement, title text not null, completed integer not null default 0)"
-        (sqlite.emptyValues ())
-    )
-    _ <- sqlite.execute database (
-      statement
-        "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
-        [sqlite.intValue 1, sqlite.textValue "Ship server-rendered HTML", sqlite.boolValue True]
-    )
-    _ <- sqlite.execute database (
-      statement
-        "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
-        [sqlite.intValue 2, sqlite.textValue "Hydrate the Todo UI", sqlite.boolValue True]
-    )
-    _ <- sqlite.execute database (
-      statement
-        "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
-        [sqlite.intValue 3, sqlite.textValue "Persist this list in SQLite", sqlite.boolValue False]
-    )
-    sqlite.succeed database
+    database <-
+      sqlite.openFile (FileConfig {
+        filename: "/tmp/seseragi-ssr-demo.sqlite",
+        readOnly: False,
+        create: True,
+        busyTimeoutMillis: 1000,
+      })
+      |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute database (
+        statement
+          "create table if not exists todos (id integer primary key autoincrement, title text not null, completed integer not null default 0)"
+          (sqlite.emptyValues ())
+      )
+      |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute database (
+        statement
+          "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
+          [sqlite.intValue 1, sqlite.textValue "Ship server-rendered HTML", sqlite.boolValue True]
+      )
+      |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute database (
+        statement
+          "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
+          [sqlite.intValue 2, sqlite.textValue "Hydrate the Todo UI", sqlite.boolValue True]
+      )
+      |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute database (
+        statement
+          "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
+          [sqlite.intValue 3, sqlite.textValue "Persist this list in SQLite", sqlite.boolValue False]
+      )
+      |> effects.mapError databaseFailure
+    succeed database
   }
 
 pub effect fn list database: sqlite.Database -> Array<Todo>
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
-    result <- sqlite.query database (todosStatement ()) (todoDecoder ())
-    sqlite.succeed result.rows
+    result <-
+      sqlite.query database (todosStatement ()) (todoDecoder ())
+      |> effects.mapError databaseFailure
+    succeed result.rows
   }
 
 pub effect fn create command: CreateTodo -> Array<Todo>
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
-    _ <- sqlite.execute command.database (
-      statement
-        "insert into todos (title, completed) values (?, ?)"
-        [sqlite.textValue command.title, sqlite.boolValue False]
-    )
-    result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
-    sqlite.succeed result.rows
+    _ <-
+      sqlite.execute command.database (
+        statement
+          "insert into todos (title, completed) values (?, ?)"
+          [sqlite.textValue command.title, sqlite.boolValue False]
+      )
+      |> effects.mapError databaseFailure
+    result <-
+      sqlite.query command.database (todosStatement ()) (todoDecoder ())
+      |> effects.mapError databaseFailure
+    succeed result.rows
   }
 
 pub effect fn toggle command: TodoById -> Array<Todo>
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
-    _ <- sqlite.execute command.database (
-      statement
-        "update todos set completed = case completed when 0 then 1 else 0 end where id = ?"
-        [sqlite.intValue command.id]
-    )
-    result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
-    sqlite.succeed result.rows
+    _ <-
+      sqlite.execute command.database (
+        statement
+          "update todos set completed = case completed when 0 then 1 else 0 end where id = ?"
+          [sqlite.intValue command.id]
+      )
+      |> effects.mapError databaseFailure
+    result <-
+      sqlite.query command.database (todosStatement ()) (todoDecoder ())
+      |> effects.mapError databaseFailure
+    succeed result.rows
   }
 
 pub effect fn delete command: TodoById -> Array<Todo>
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
-    _ <- sqlite.execute command.database (
-      statement "delete from todos where id = ?" [sqlite.intValue command.id]
-    )
-    result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
-    sqlite.succeed result.rows
+    _ <-
+      sqlite.execute command.database (
+        statement "delete from todos where id = ?" [sqlite.intValue command.id]
+      )
+      |> effects.mapError databaseFailure
+    result <-
+      sqlite.query command.database (todosStatement ()) (todoDecoder ())
+      |> effects.mapError databaseFailure
+    succeed result.rows
   }
