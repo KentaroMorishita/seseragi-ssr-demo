@@ -1,5 +1,9 @@
 import * as dom from "std/web/dom"
-import { run } from "./counter"
+import * as http from "std/http"
+import * as navigation from "std/web/navigation"
+import { run } from "./todo"
 
-pub effect fn main -> Unit with dom: dom.Dom fails String =
+pub effect fn main -> Unit
+with dom: dom.Dom, httpClient: http.HttpClient, navigation: navigation.Navigation
+fails String =
   run ()
