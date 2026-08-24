@@ -2,7 +2,11 @@ import * as html from "std/web/html"
 import { view as counterView } from "ui"
 import * as styles from "./styles"
 
-pub fn body path: String -> html.Html<Unit> =
+type Action =
+  | Increment
+  | Reset
+
+pub fn body path: String -> html.Html<Action> =
   html.body {
     style: styles.pageStyle (),
     children: html.main {
@@ -36,7 +40,7 @@ pub fn body path: String -> html.Html<Unit> =
         html.section {
           id: "counter-app",
           style: styles.interactiveCardStyle (),
-          children: counterView () () 0
+          children: counterView Increment Reset 0
         }
       ]
     }
