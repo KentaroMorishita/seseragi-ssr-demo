@@ -1,0 +1,33 @@
+import * as effects from "std/effect"
+import * as http from "std/http/server"
+import { render } from "./view"
+
+type AppError deriving Show =
+  | ServerFailure String
+
+fn serverFailure error: http.HttpServerError -> AppError =
+  ServerFailure (http.errorMessage error)
+
+fn responseFor request: http.HttpServerRequest -> http.HttpServerResponse = {
+  let path = http.requestPath request
+
+  if path == "/health" then
+    http.textResponse 200 [] "ok"
+  else if path == "/" then
+    http.textResponse 200
+      [http.header "content-type" "text/html; charset=utf-8"]
+      (render path)
+  else
+    http.textResponse 404 [] "not found"
+}
+
+let handler: http.Handler<{}, Never> =
+  http.pureHandler responseFor
+
+pub effect fn main -> Unit with httpServer: http.HttpServer fails AppError =
+  http.serveOnce {
+    hostname: "127.0.0.1",
+    port: 3000,
+    handler
+  }
+  |> effects.mapError serverFailure
