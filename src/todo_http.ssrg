@@ -5,6 +5,7 @@ import * as sqlite from "sqlite"
 import * as text from "std/text"
 import { Todo } from "ui"
 import { render } from "./document"
+import { CreateTodo, TodoById } from "./todo_store"
 import * as store from "./todo_store"
 
 fn todosResponse todos: Array<Todo> -> http.HttpServerResponse =
@@ -28,7 +29,7 @@ fn badRequest message: String -> http.HttpServerResponse =
 pub fn handler database: sqlite.Database
   -> http.Handler<{ sqlite: sqlite.Sqlite }, Never> =
   http.recoverHandler
-    (\_error: sqlite.Error ->
+    (\_error: String ->
       http.textResponse 500
         [http.header "content-type" "text/plain; charset=utf-8"]
         "SQLite operation failed"
@@ -38,68 +39,68 @@ pub fn handler database: sqlite.Database
       let path = http.requestPath request
 
       if path == "/health" then
-        sqlite.succeed (http.textResponse 200 [] "ok")
+        store.succeed (http.textResponse 200 [] "ok")
       else if method == "GET" && path == "/api/todos" then
         do {
           todos <- store.list database
-          sqlite.succeed (todosResponse todos)
+          store.succeed (todosResponse todos)
         }
       else if method == "POST" && path == "/api/todos" then
         match text.decodeUtf8 (http.requestBody request) {
-          Left _ -> sqlite.succeed (badRequest "request body must be UTF-8")
+          Left _ -> store.succeed (badRequest "request body must be UTF-8")
           Right title ->
             if title == "" then
-              sqlite.succeed (badRequest "title is required")
+              store.succeed (badRequest "title is required")
             else
               do {
-                todos <- store.create (store.CreateTodo {
+                todos <- store.create (CreateTodo {
                   database: database,
                   title: title,
                 })
-                sqlite.succeed (todosResponse todos)
+                store.succeed (todosResponse todos)
               }
         }
       else if method == "POST" && path == "/api/todos/toggle" then
         match text.decodeUtf8 (http.requestBody request) {
-          Left _ -> sqlite.succeed (badRequest "todo id must be an integer")
+          Left _ -> store.succeed (badRequest "todo id must be an integer")
           Right idText ->
             match ints.parse idText {
-              Left _ -> sqlite.succeed (badRequest "todo id must be an integer")
+              Left _ -> store.succeed (badRequest "todo id must be an integer")
               Right id ->
                 do {
-                  todos <- store.toggle (store.TodoById {
+                  todos <- store.toggle (TodoById {
                     database: database,
                     id: id,
                   })
-                  sqlite.succeed (todosResponse todos)
+                  store.succeed (todosResponse todos)
                 }
             }
         }
       else if method == "POST" && path == "/api/todos/delete" then
         match text.decodeUtf8 (http.requestBody request) {
-          Left _ -> sqlite.succeed (badRequest "todo id must be an integer")
+          Left _ -> store.succeed (badRequest "todo id must be an integer")
           Right idText ->
             match ints.parse idText {
-              Left _ -> sqlite.succeed (badRequest "todo id must be an integer")
+              Left _ -> store.succeed (badRequest "todo id must be an integer")
               Right id ->
                 do {
-                  todos <- store.delete (store.TodoById {
+                  todos <- store.delete (TodoById {
                     database: database,
                     id: id,
                   })
-                  sqlite.succeed (todosResponse todos)
+                  store.succeed (todosResponse todos)
                 }
             }
         }
       else if method == "GET" then
         do {
           todos <- store.list database
-          sqlite.succeed (
+          store.succeed (
             http.textResponse 200
               [http.header "content-type" "text/html; charset=utf-8"]
               (render path todos)
           )
         }
       else
-        sqlite.succeed (http.textResponse 405 [] "method not allowed")
+        store.succeed (http.textResponse 405 [] "method not allowed")
     })
