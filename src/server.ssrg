@@ -1,30 +1,110 @@
+import * as deferred from "std/deferred"
 import * as effects from "std/effect"
 import * as http from "std/http/server"
+import * as ints from "std/int"
+import * as json from "std/json"
+import * as sqlite from "sqlite"
+import * as text from "std/text"
+import { Todo } from "ui"
 import { render } from "./document"
+import * as store from "./todo_store"
 
 fn serverFailure error: http.HttpServerError -> String =
   http.errorMessage error
 
-fn responseFor request: http.HttpServerRequest -> http.HttpServerResponse = {
+fn databaseFailure error: sqlite.Error -> String =
+  show error
+
+fn jsonTodo todo: Todo -> { id: Int, title: String, completed: Bool } =
+  { id: todo.id, title: todo.title, completed: todo.completed }
+
+fn todosResponse todos: Array<Todo> -> http.HttpServerResponse =
+  http.textResponse 200
+    [http.header "content-type" "application/json; charset=utf-8"]
+    (json.encodeString (map jsonTodo todos))
+
+fn badRequest message: String -> http.HttpServerResponse =
+  http.textResponse 400
+    [http.header "content-type" "text/plain; charset=utf-8"]
+    message
+
+fn databaseError error: sqlite.Error -> http.HttpServerResponse =
+  http.textResponse 500
+    [http.header "content-type" "text/plain; charset=utf-8"]
+    (`SQLite error: ${show error}`)
+
+fn createTodo database: sqlite.Database -> request: http.HttpServerRequest
+  -> http.HttpServerResponse
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
+  match text.decodeUtf8 (http.requestBody request) {
+    Left _ -> effects.succeed (badRequest "request body must be UTF-8")
+    Right title ->
+      if title == "" then
+        effects.succeed (badRequest "title is required")
+      else
+        store.create database title |> map todosResponse
+  }
+
+fn mutateTodo operation: (sqlite.Database -> Int -> Effect<{ sqlite: sqlite.Sqlite }, sqlite.Error, Array<Todo>>)
+  -> database: sqlite.Database
+  -> request: http.HttpServerRequest
+  -> http.HttpServerResponse
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
+  match text.decodeUtf8 (http.requestBody request) {
+    Left _ -> effects.succeed (badRequest "request body must be UTF-8")
+    Right idText ->
+      match ints.parse idText {
+        Left _ -> effects.succeed (badRequest "todo id must be an integer")
+        Right id -> operation database id |> map todosResponse
+      }
+  }
+
+fn responseFor database: sqlite.Database -> request: http.HttpServerRequest
+  -> http.HttpServerResponse
+with sqlite: sqlite.Sqlite
+fails sqlite.Error = {
+  let method = http.requestMethod request
   let path = http.requestPath request
 
   if path == "/health" then
-    http.textResponse 200 [] "ok"
-  else if http.requestMethod request == "GET" then
-    http.textResponse 200
-      [http.header "content-type" "text/html; charset=utf-8"]
-      (render path)
+    effects.succeed (http.textResponse 200 [] "ok")
+  else if method == "GET" && path == "/api/todos" then
+    store.list database |> map todosResponse
+  else if method == "POST" && path == "/api/todos" then
+    createTodo database request
+  else if method == "POST" && path == "/api/todos/toggle" then
+    mutateTodo store.toggle database request
+  else if method == "POST" && path == "/api/todos/delete" then
+    mutateTodo store.delete database request
+  else if method == "GET" then
+    do {
+      todos <- store.list database
+      effects.succeed (
+        http.textResponse 200
+          [http.header "content-type" "text/html; charset=utf-8"]
+          (render path todos)
+      )
+    }
   else
-    http.textResponse 405 [] "method not allowed"
+    effects.succeed (http.textResponse 405 [] "method not allowed")
 }
 
-let handler: http.Handler<{}, Never> =
-  http.pureHandler responseFor
+fn handler database: sqlite.Database -> http.Handler<{ sqlite: sqlite.Sqlite }, Never> =
+  http.recoverHandler databaseError (responseFor database)
 
-pub effect fn run -> Unit with httpServer: http.HttpServer fails String =
-  http.serveOnce {
-    hostname: "127.0.0.1",
-    port: 3000,
-    handler
+pub effect fn run -> Unit
+with httpServer: http.HttpServer, sqlite: sqlite.Sqlite
+fails String =
+  do {
+    database <- store.open () |> effects.mapError databaseFailure
+    _ <- http.listen {
+      hostname: "127.0.0.1",
+      port: 3001,
+      handler: handler database
+    }
+    |> effects.mapError serverFailure
+    keepAlive <- deferred.make ()
+    deferred.await keepAlive
   }
-  |> effects.mapError serverFailure
