@@ -18,17 +18,6 @@ import {
 } from "ui"
 import * as api from "./api"
 
-struct WorkerState {
-  origin: String,
-  todos: MutableSignal<Array<Todo>>,
-  draft: MutableSignal<String>,
-}
-
-struct AddCommand {
-  state: WorkerState,
-  title: String,
-}
-
 let defaultDomOptions = dom.defaultOptions ()
 let hydrationOptions: DomOptions = DomOptions {
   ...defaultDomOptions,
@@ -51,6 +40,18 @@ fn domFailure error: dom.DomRuntimeError<String> -> String =
 fn navigationFailure error: navigation.NavigationError -> String =
   navigation.errorMessage error
 
+fn keep<A, B> value: A -> _ignored: B -> A =
+  value
+
+fn httpClientRequirement -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
+  effects.service (\environment -> environment.httpClient)
+
+fn httpSuccess<A> value: A
+  -> Effect<{ httpClient: http.HttpClient }, String, A> =
+  httpClientRequirement ()
+  |> effects.mapError neverFailure
+  |> map (keep value)
+
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
   dom.content (todoList todos) []
 
@@ -63,61 +64,78 @@ fn dispatch actions: queue.Queue<Action>
 fn setDraft value: String
   -> draft: MutableSignal<String>
   -> Effect<{ httpClient: http.HttpClient }, String, Unit> =
-  signals.set value draft
-  |> effects.mapError neverFailure
+  flatMap
+    (\_unit: Unit ->
+      signals.set value draft
+      |> effects.mapError neverFailure
+    )
+    (httpSuccess ())
 
-fn httpSuccess<A> value: A
-  -> Effect<{ httpClient: http.HttpClient }, String, A> =
-  effects.succeed value
-
-effect fn insertTodo command: AddCommand -> Unit
+effect fn insertTodo origin: String
+  -> title: String
+  -> todos: MutableSignal<Array<Todo>>
+  -> draft: MutableSignal<String>
+  -> Unit
 with httpClient: http.HttpClient
 fails String =
   do {
-    next <- api.create command.state.origin command.title
-    _ <- signals.set next command.state.todos
-    signals.set "" command.state.draft
+    next <- api.create origin title
+    _ <- signals.set next todos
+    signals.set "" draft
   }
 
-effect fn applyAdd state: WorkerState -> Unit
+effect fn applyAdd origin: String
+  -> todos: MutableSignal<Array<Todo>>
+  -> draft: MutableSignal<String>
+  -> Unit
 with httpClient: http.HttpClient
 fails String =
   do {
-    title <- signals.read state.draft
+    title <- signals.read draft
     if title == "" then
       httpSuccess ()
     else
-      insertTodo (AddCommand { state: state, title: title })
+      insertTodo origin title todos draft
   }
 
-effect fn applyToggle state: WorkerState -> id: Int -> Unit
+effect fn applyToggle origin: String
+  -> todos: MutableSignal<Array<Todo>>
+  -> id: Int
+  -> Unit
 with httpClient: http.HttpClient
 fails String =
   do {
-    next <- api.toggle state.origin id
-    signals.set next state.todos
+    next <- api.toggle origin id
+    signals.set next todos
   }
 
-effect fn applyDelete state: WorkerState -> id: Int -> Unit
+effect fn applyDelete origin: String
+  -> todos: MutableSignal<Array<Todo>>
+  -> id: Int
+  -> Unit
 with httpClient: http.HttpClient
 fails String =
   do {
-    next <- api.delete state.origin id
-    signals.set next state.todos
+    next <- api.delete origin id
+    signals.set next todos
   }
 
-pub effect fn worker actions: queue.Queue<Action> -> state: WorkerState -> Unit
+pub effect fn worker origin: String
+  -> actions: queue.Queue<Action>
+  -> todos: MutableSignal<Array<Todo>>
+  -> draft: MutableSignal<String>
+  -> Unit
 with httpClient: http.HttpClient
 fails String =
   do {
     action <- queue.take actions |> effects.mapError queueFailure
     _ <- match action {
-      DraftChanged value -> setDraft value state.draft
-      AddTodo -> applyAdd state
-      ToggleTodo id -> applyToggle state id
-      DeleteTodo id -> applyDelete state id
+      DraftChanged value -> setDraft value draft
+      AddTodo -> applyAdd origin todos draft
+      ToggleTodo id -> applyToggle origin todos id
+      DeleteTodo id -> applyDelete origin todos id
     }
-    worker actions state
+    worker origin actions todos draft
   }
 
 pub effect fn run -> Unit
@@ -137,16 +155,11 @@ fails String =
       dom.bindRegion "#todo-list" listRegion
     ]
     let reactive = dom.content (todoView initial "") bindings
-    let state = WorkerState {
-      origin: origin,
-      todos: todos,
-      draft: draft,
-    }
 
     target <- dom.query "#todo-app"
       |> effects.mapError domQueryFailure
 
-    _ <- effects.fork (worker actions state)
+    _ <- effects.fork (worker origin actions todos draft)
 
     dom.runContent hydrationOptions target (dispatch actions) reactive
       |> effects.mapError domFailure
