@@ -9,3 +9,4 @@ target = "process"
 
 [dependencies]
 ui = { package = "seseragi-ssr-demo-ui", path = "ui" }
+sqlite = { package = "seseragi/sqlite", path = "packages/sqlite" }
