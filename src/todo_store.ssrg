@@ -17,22 +17,15 @@ fn todoDecoder -> sqlite.Decoder<Todo> =
     (sqlite.map2 todoStart (sqlite.int "id") (sqlite.string "title"))
     (sqlite.bool "completed")
 
-effect fn seed database: sqlite.Database -> id: Int -> title: String -> completed: Bool
-  -> Unit
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
-  do {
-    _ <- sqlite.execute database (
-      statement
-        "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
-        [sqlite.intValue id, sqlite.textValue title, sqlite.boolValue completed]
-    )
-    effects.succeed ()
-  }
+effect fn seed database: sqlite.Database -> id: Int -> title: String -> completed: Bool =
+  sqlite.execute database (
+    statement
+      "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
+      [sqlite.intValue id, sqlite.textValue title, sqlite.boolValue completed]
+  )
+  |> effects.map (\_ -> ())
 
-pub effect fn open -> sqlite.Database
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+pub effect fn open =
   do {
     database <- sqlite.openFile (FileConfig {
       filename: "/tmp/seseragi-ssr-demo.sqlite",
@@ -51,21 +44,15 @@ fails sqlite.Error =
     effects.succeed database
   }
 
-pub effect fn list database: sqlite.Database -> Array<Todo>
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
-  do {
-    result <- sqlite.query database (
-      statement
-        "select id, title, completed from todos order by id desc"
-        (sqlite.emptyValues ())
-    ) (todoDecoder ())
-    effects.succeed result.rows
-  }
+pub effect fn list database: sqlite.Database =
+  sqlite.query database (
+    statement
+      "select id, title, completed from todos order by id desc"
+      (sqlite.emptyValues ())
+  ) (todoDecoder ())
+  |> effects.map (\result -> result.rows)
 
-pub effect fn create database: sqlite.Database -> title: String -> Array<Todo>
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+pub effect fn create database: sqlite.Database -> title: String =
   do {
     _ <- sqlite.execute database (
       statement
@@ -75,9 +62,7 @@ fails sqlite.Error =
     list database
   }
 
-pub effect fn toggle database: sqlite.Database -> id: Int -> Array<Todo>
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+pub effect fn toggle database: sqlite.Database -> id: Int =
   do {
     _ <- sqlite.execute database (
       statement
@@ -87,9 +72,7 @@ fails sqlite.Error =
     list database
   }
 
-pub effect fn delete database: sqlite.Database -> id: Int -> Array<Todo>
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+pub effect fn delete database: sqlite.Database -> id: Int =
   do {
     _ <- sqlite.execute database (
       statement "delete from todos where id = ?" [sqlite.intValue id]
