@@ -38,14 +38,24 @@ pub type Error deriving Show =
   | DriverFailure DriverError
   | RowDecodeFailure RowDecodeError
 
+pub alias Db<A> = Effect<{ sqlite: Sqlite }, Error, A>
+
 fn unavailable -> Error = DriverFailure (DriverError {
   operation: "package",
   code: "SQLITE_UNAVAILABLE",
   message: "SQLite runtime operation was not linked",
 })
 
-pub fn succeed<A> value: A -> Effect<{}, Error, A> =
-  effects.fromEither (Right value)
+fn impossible _error: Never -> Error =
+  unavailable ()
+
+fn keep<A> value: A -> _sqlite: Sqlite -> A =
+  value
+
+pub fn succeed<A> value: A -> Db<A> =
+  effects.service (\environment: { sqlite: Sqlite } -> environment.sqlite)
+  |> map (keep value)
+  |> effects.mapError impossible
 
 pub fn textValue value: String -> Value = Value { token: () }
 pub fn intValue value: Int -> Value = Value { token: () }
