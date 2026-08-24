@@ -33,13 +33,6 @@ fn databaseFailure _error: sqlite.Error -> String =
 fn neverFailure _error: Never -> String =
   "unreachable"
 
-fn sqliteNever _error: Never -> sqlite.Error =
-  sqlite.DriverFailure (sqlite.DriverError {
-    operation: "unreachable",
-    code: "NEVER",
-    message: "unreachable SQLite failure conversion",
-  })
-
 fn statement sql: String -> values: Array<sqlite.Value> -> Statement =
   Statement { sql: sql, values: values }
 
@@ -75,7 +68,7 @@ fn badRequest message: String -> http.HttpServerResponse =
     [http.header "content-type" "text/plain; charset=utf-8"]
     message
 
-fn databaseError _error: sqlite.Error -> http.HttpServerResponse =
+fn databaseError _error: String -> http.HttpServerResponse =
   http.textResponse 500
     [http.header "content-type" "text/plain; charset=utf-8"]
     "SQLite operation failed"
@@ -90,23 +83,21 @@ fn parseTodoId request: http.HttpServerRequest -> Either<String, Int> =
       }
   }
 
-effect fn sqlitePure<A> value: A =
-  effects.succeed value
-  |> effects.mapError sqliteNever
+fn sqliteService -> Effect<{ sqlite: sqlite.Sqlite }, Never, sqlite.Sqlite> =
+  effects.service (\environment: { sqlite: sqlite.Sqlite } -> environment.sqlite)
 
-effect fn sqliteRequirement =
-  effects.service (\environment -> environment.sqlite)
-  |> effects.mapError sqliteNever
+fn keepSqlite<A> value: A -> _service: sqlite.Sqlite -> A =
+  value
 
-effect fn sqliteSuccess<A> value: A =
-  do {
-    _ <- sqliteRequirement ()
-    sqlitePure value
-  }
+fn sqliteContext<A> value: A
+  -> Effect<{ sqlite: sqlite.Sqlite }, String, A> =
+  sqliteService ()
+  |> map (keepSqlite value)
+  |> effects.mapError neverFailure
 
 effect fn openDatabase -> sqlite.Database
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
     database <- sqlite.openFile (FileConfig {
       filename: "/tmp/seseragi-ssr-demo.sqlite",
@@ -114,126 +105,135 @@ fails sqlite.Error =
       create: True,
       busyTimeoutMillis: 1000,
     })
+    |> effects.mapError databaseFailure
     _ <- sqlite.execute database (
       statement
         "create table if not exists todos (id integer primary key autoincrement, title text not null, completed integer not null default 0)"
         (sqlite.emptyValues ())
     )
+    |> effects.mapError databaseFailure
     _ <- sqlite.execute database (
       statement
         "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
         [sqlite.intValue 1, sqlite.textValue "Ship server-rendered HTML", sqlite.boolValue True]
     )
+    |> effects.mapError databaseFailure
     _ <- sqlite.execute database (
       statement
         "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
         [sqlite.intValue 2, sqlite.textValue "Hydrate the Todo UI", sqlite.boolValue True]
     )
+    |> effects.mapError databaseFailure
     _ <- sqlite.execute database (
       statement
         "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
         [sqlite.intValue 3, sqlite.textValue "Persist this list in SQLite", sqlite.boolValue False]
     )
-    sqlitePure database
+    |> effects.mapError databaseFailure
+    sqliteContext database
   }
 
 effect fn listTodos database: sqlite.Database -> Array<Todo>
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
     result <- sqlite.query database (todosStatement ()) (todoDecoder ())
-    sqlitePure result.rows
+      |> effects.mapError databaseFailure
+    sqliteContext result.rows
   }
 
 effect fn insertTodo command: CreateCommand -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
     _ <- sqlite.execute command.context.database (
       statement
         "insert into todos (title, completed) values (?, ?)"
         [sqlite.textValue command.title, sqlite.boolValue False]
     )
+    |> effects.mapError databaseFailure
     todos <- listTodos command.context.database
-    sqlitePure (todosResponse todos)
+    sqliteContext (todosResponse todos)
   }
 
 effect fn createTodo context: RequestContext -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   match text.decodeUtf8 (http.requestBody context.request) {
-    Left _ -> sqliteSuccess (badRequest "request body must be UTF-8")
+    Left _ -> sqliteContext (badRequest "request body must be UTF-8")
     Right title ->
       if title == "" then
-        sqliteSuccess (badRequest "title is required")
+        sqliteContext (badRequest "title is required")
       else
         insertTodo (CreateCommand { context: context, title: title })
   }
 
 effect fn toggleById command: TodoIdCommand -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
     _ <- sqlite.execute command.context.database (
       statement
         "update todos set completed = case completed when 0 then 1 else 0 end where id = ?"
         [sqlite.intValue command.id]
     )
+    |> effects.mapError databaseFailure
     todos <- listTodos command.context.database
-    sqlitePure (todosResponse todos)
+    sqliteContext (todosResponse todos)
   }
 
 effect fn toggleTodo context: RequestContext -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   match parseTodoId context.request {
-    Left message -> sqliteSuccess (badRequest message)
+    Left message -> sqliteContext (badRequest message)
     Right id -> toggleById (TodoIdCommand { context: context, id: id })
   }
 
 effect fn deleteById command: TodoIdCommand -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
     _ <- sqlite.execute command.context.database (
       statement "delete from todos where id = ?" [sqlite.intValue command.id]
     )
+    |> effects.mapError databaseFailure
     todos <- listTodos command.context.database
-    sqlitePure (todosResponse todos)
+    sqliteContext (todosResponse todos)
   }
 
 effect fn deleteTodo context: RequestContext -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   match parseTodoId context.request {
-    Left message -> sqliteSuccess (badRequest message)
+    Left message -> sqliteContext (badRequest message)
     Right id -> deleteById (TodoIdCommand { context: context, id: id })
   }
 
 effect fn listResponse context: RequestContext -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
     todos <- listTodos context.database
-    sqlitePure (todosResponse todos)
+    sqliteContext (todosResponse todos)
   }
 
 effect fn pageResponse context: RequestContext -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+fails String =
   do {
     todos <- listTodos context.database
-    sqlitePure (htmlResponse (http.requestPath context.request) todos)
+    sqliteContext (htmlResponse (http.requestPath context.request) todos)
   }
 
 effect fn responseFor context: RequestContext -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
-fails sqlite.Error = {
+fails String = {
   let method = http.requestMethod context.request
   let path = http.requestPath context.request
 
   if path == "/health" then
-    sqliteSuccess (http.textResponse 200 [] "ok")
+    sqliteContext (http.textResponse 200 [] "ok")
   else if method == "GET" && path == "/api/todos" then
     listResponse context
   else if method == "POST" && path == "/api/todos" then
@@ -245,7 +245,7 @@ fails sqlite.Error = {
   else if method == "GET" then
     pageResponse context
   else
-    sqliteSuccess (http.textResponse 405 [] "method not allowed")
+    sqliteContext (http.textResponse 405 [] "method not allowed")
 }
 
 let handler =
@@ -257,7 +257,7 @@ let handler =
 
 pub effect fn run =
   do {
-    database <- openDatabase () |> effects.mapError databaseFailure
+    database <- openDatabase ()
     _ <- http.listen {
       hostname: "0.0.0.0",
       port: 3001,
