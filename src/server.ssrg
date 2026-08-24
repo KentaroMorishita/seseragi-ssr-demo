@@ -14,7 +14,7 @@ fn serverFailure error: http.HttpServerError -> String =
   http.errorMessage error
 
 fn databaseFailure error: sqlite.Error -> String =
-  show error
+  "SQLite operation failed"
 
 fn jsonTodo todo: Todo -> { id: Int, title: String, completed: Bool } =
   { id: todo.id, title: todo.title, completed: todo.completed }
@@ -30,7 +30,7 @@ fn badRequest message: String -> http.HttpServerResponse =
 fn databaseError error: sqlite.Error -> http.HttpServerResponse =
   http.textResponse 500
     [http.header "content-type" "text/plain; charset=utf-8"]
-    (`SQLite error: ${show error}`)
+    "SQLite operation failed"
 
 effect fn createTodo database: sqlite.Database -> request: http.HttpServerRequest
   -> http.HttpServerResponse
@@ -129,7 +129,7 @@ pub effect fn run -> Unit
 with httpServer: http.HttpServer, sqlite: sqlite.Sqlite
 fails String =
   do {
-    database <- store.open () |> effects.mapError databaseFailure
+    database <- store.openDatabase () |> effects.mapError databaseFailure
     _ <- http.listen {
       hostname: "127.0.0.1",
       port: 3001,
