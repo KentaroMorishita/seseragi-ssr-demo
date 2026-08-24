@@ -5,12 +5,22 @@ import * as ints from "std/int"
 import * as json from "std/json"
 import * as sqlite from "sqlite"
 import * as text from "std/text"
-import { DriverError, DriverFailure, FileConfig, Statement } from "sqlite"
+import {
+  Database,
+  DriverError,
+  DriverFailure,
+  Error as SqliteError,
+  FileConfig,
+  Sqlite as SqliteService,
+  Statement,
+} from "sqlite"
 import { Todo } from "ui"
 import { render } from "./document"
 
+alias Db<A> = Effect<{ sqlite: SqliteService }, SqliteError, A>
+
 struct RequestContext {
-  database: sqlite.Database,
+  database: Database,
   request: http.HttpServerRequest,
 }
 
@@ -29,17 +39,17 @@ struct FixedResponse {
   response: http.HttpServerResponse,
 }
 
-fn syntheticError operation: String -> code: String -> message: String -> sqlite.Error =
+fn syntheticError operation: String -> code: String -> message: String -> SqliteError =
   DriverFailure (DriverError {
     operation: operation,
     code: code,
     message: message,
   })
 
-fn serverFailure error: http.HttpServerError -> sqlite.Error =
+fn serverFailure error: http.HttpServerError -> SqliteError =
   syntheticError "http-server" "HTTP_SERVER" (http.errorMessage error)
 
-fn neverFailure _error: Never -> sqlite.Error =
+fn neverFailure _error: Never -> SqliteError =
   syntheticError "runtime" "NEVER" "unreachable failure"
 
 fn statement sql: String -> values: Array<sqlite.Value> -> Statement =
@@ -77,7 +87,7 @@ fn badRequest message: String -> http.HttpServerResponse =
     [http.header "content-type" "text/plain; charset=utf-8"]
     message
 
-fn databaseError _error: sqlite.Error -> http.HttpServerResponse =
+fn databaseError _error: SqliteError -> http.HttpServerResponse =
   http.textResponse 500
     [http.header "content-type" "text/plain; charset=utf-8"]
     "SQLite operation failed"
@@ -92,7 +102,7 @@ fn parseTodoId request: http.HttpServerRequest -> Either<String, Int> =
       }
   }
 
-effect fn openDatabase =
+fn openDatabase -> Db<Database> =
   do {
     database <- sqlite.openFile (FileConfig {
       filename: "/tmp/seseragi-ssr-demo.sqlite",
@@ -123,19 +133,19 @@ effect fn openDatabase =
     sqlite.succeed database
   }
 
-effect fn listTodos database: sqlite.Database =
+fn listTodos database: Database -> Db<Array<Todo>> =
   do {
     result <- sqlite.query database (todosStatement ()) (todoDecoder ())
     sqlite.succeed result.rows
   }
 
-effect fn fixedResponse command: FixedResponse =
+fn fixedResponse command: FixedResponse -> Db<http.HttpServerResponse> =
   do {
     _ <- listTodos command.context.database
     sqlite.succeed command.response
   }
 
-effect fn insertTodo command: CreateCommand =
+fn insertTodo command: CreateCommand -> Db<http.HttpServerResponse> =
   do {
     _ <- sqlite.execute command.context.database (
       statement
@@ -146,7 +156,7 @@ effect fn insertTodo command: CreateCommand =
     sqlite.succeed (todosResponse todos)
   }
 
-effect fn createTodo context: RequestContext =
+fn createTodo context: RequestContext -> Db<http.HttpServerResponse> =
   match text.decodeUtf8 (http.requestBody context.request) {
     Left _ -> fixedResponse (FixedResponse {
       context: context,
@@ -162,7 +172,7 @@ effect fn createTodo context: RequestContext =
         insertTodo (CreateCommand { context: context, title: title })
   }
 
-effect fn toggleById command: TodoIdCommand =
+fn toggleById command: TodoIdCommand -> Db<http.HttpServerResponse> =
   do {
     _ <- sqlite.execute command.context.database (
       statement
@@ -173,7 +183,7 @@ effect fn toggleById command: TodoIdCommand =
     sqlite.succeed (todosResponse todos)
   }
 
-effect fn toggleTodo context: RequestContext =
+fn toggleTodo context: RequestContext -> Db<http.HttpServerResponse> =
   match parseTodoId context.request {
     Left message -> fixedResponse (FixedResponse {
       context: context,
@@ -182,7 +192,7 @@ effect fn toggleTodo context: RequestContext =
     Right id -> toggleById (TodoIdCommand { context: context, id: id })
   }
 
-effect fn deleteById command: TodoIdCommand =
+fn deleteById command: TodoIdCommand -> Db<http.HttpServerResponse> =
   do {
     _ <- sqlite.execute command.context.database (
       statement "delete from todos where id = ?" [sqlite.intValue command.id]
@@ -191,7 +201,7 @@ effect fn deleteById command: TodoIdCommand =
     sqlite.succeed (todosResponse todos)
   }
 
-effect fn deleteTodo context: RequestContext =
+fn deleteTodo context: RequestContext -> Db<http.HttpServerResponse> =
   match parseTodoId context.request {
     Left message -> fixedResponse (FixedResponse {
       context: context,
@@ -200,19 +210,19 @@ effect fn deleteTodo context: RequestContext =
     Right id -> deleteById (TodoIdCommand { context: context, id: id })
   }
 
-effect fn listResponse context: RequestContext =
+fn listResponse context: RequestContext -> Db<http.HttpServerResponse> =
   do {
     todos <- listTodos context.database
     sqlite.succeed (todosResponse todos)
   }
 
-effect fn pageResponse context: RequestContext =
+fn pageResponse context: RequestContext -> Db<http.HttpServerResponse> =
   do {
     todos <- listTodos context.database
     sqlite.succeed (htmlResponse (http.requestPath context.request) todos)
   }
 
-effect fn responseFor context: RequestContext = {
+fn responseFor context: RequestContext -> Db<http.HttpServerResponse> = {
   let method = http.requestMethod context.request
   let path = http.requestPath context.request
 
@@ -238,14 +248,15 @@ effect fn responseFor context: RequestContext = {
     })
 }
 
-let handler =
-  \database: sqlite.Database ->
-    http.recoverHandler databaseError (
-      \request: http.HttpServerRequest ->
-        responseFor (RequestContext { database: database, request: request })
-    )
+fn handler database: Database -> http.Handler<{ sqlite: SqliteService }, Never> =
+  http.recoverHandler databaseError (
+    \request: http.HttpServerRequest ->
+      responseFor (RequestContext { database: database, request: request })
+  )
 
-pub effect fn run =
+pub effect fn run -> Unit
+with httpServer: http.HttpServer, sqlite: SqliteService
+fails SqliteError =
   do {
     database <- openDatabase ()
     _ <- http.listen {
