@@ -17,8 +17,8 @@ let hydrationOptions: DomOptions = DomOptions {
 }
 
 fn queueFailure error: queue.QueueClosed -> String = "Todo action queue closed"
-fn domQueryFailure error: dom.DomError -> String = show error
-fn domFailure error: dom.DomRuntimeError<String> -> String = show error
+fn domQueryFailure error: dom.DomError -> String = "Todo DOM target unavailable"
+fn domFailure error: dom.DomRuntimeError<String> -> String = "Todo DOM runtime stopped"
 fn navigationFailure error: navigation.NavigationError -> String =
   navigation.errorMessage error
 
