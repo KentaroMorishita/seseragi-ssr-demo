@@ -13,20 +13,35 @@ pub type Action =
   | ToggleTodo Int
   | DeleteTodo Int
 
+pub struct TodoActions<A> {
+  draftChanged: String -> A,
+  addTodo: A,
+  toggleTodo: Int -> A,
+  deleteTodo: Int -> A,
+}
+
+fn defaultActions -> TodoActions<Action> =
+  TodoActions {
+    draftChanged: DraftChanged,
+    addTodo: AddTodo,
+    toggleTodo: ToggleTodo,
+    deleteTodo: DeleteTodo,
+  }
+
 fn statusText todo: Todo -> String =
   if todo.completed then "Done" else "Open"
 
 fn todoTitleStyle todo: Todo -> html.Style =
   if todo.completed then styles.completedTitleStyle () else styles.todoTitleStyle ()
 
-fn todoItem todo: Todo -> html.Html<Action> =
+fn todoItemWith<A> actions: TodoActions<A> -> todo: Todo -> html.Html<A> =
   html.li {
     style: styles.todoItemStyle (),
     children: [
       html.button {
         buttonType: "button",
         style: styles.toggleButtonStyle todo.completed,
-        onClick: ToggleTodo todo.id,
+        onClick: actions.toggleTodo todo.id,
         children: statusText todo
       },
       html.p {
@@ -36,20 +51,23 @@ fn todoItem todo: Todo -> html.Html<Action> =
       html.button {
         buttonType: "button",
         style: styles.deleteButtonStyle (),
-        onClick: DeleteTodo todo.id,
+        onClick: actions.deleteTodo todo.id,
         children: "Delete"
       }
     ]
   }
 
-pub fn list todos: Array<Todo> -> html.Html<Action> =
+pub fn listWith<A> actions: TodoActions<A> -> todos: Array<Todo> -> html.Html<A> =
   html.ul {
     id: "todo-list",
     style: styles.todoListStyle (),
-    children: map todoItem todos
+    children: map (todoItemWith actions) todos
   }
 
-pub fn view todos: Array<Todo> -> draft: String -> html.Html<Action> =
+pub fn viewWith<A> actions: TodoActions<A>
+  -> todos: Array<Todo>
+  -> draft: String
+  -> html.Html<A> =
   html.section {
     id: "todo-app",
     style: styles.todoCardStyle (),
@@ -89,20 +107,26 @@ pub fn view todos: Array<Todo> -> draft: String -> html.Html<Action> =
             placeholder: "Add a task",
             autoComplete: "off",
             style: styles.inputStyle (),
-            onInput: \event -> DraftChanged event.value
+            onInput: \event -> actions.draftChanged event.value
           },
           html.button {
             buttonType: "button",
             style: styles.addButtonStyle (),
-            onClick: AddTodo,
+            onClick: actions.addTodo,
             children: "Add"
           }
         ]
       },
-      list todos,
+      listWith actions todos,
       html.p {
         style: styles.noteStyle (),
         children: "Ephemeral container SQLite · data may reset when the deployment or instance restarts."
       }
     ]
   }
+
+pub fn list todos: Array<Todo> -> html.Html<Action> =
+  listWith (defaultActions ()) todos
+
+pub fn view todos: Array<Todo> -> draft: String -> html.Html<Action> =
+  viewWith (defaultActions ()) todos draft
