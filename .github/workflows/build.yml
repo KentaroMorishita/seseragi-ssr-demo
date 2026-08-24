@@ -1,0 +1,50 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ssr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install Seseragi CLI
+        run: cargo install --git https://github.com/KentaroMorishita/seseragi --locked seseragi-cli
+
+      - name: Build
+        run: seseragi build .
+
+      - name: SSR smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          timeout 60s seseragi run . >/tmp/seseragi-ssr-demo.log 2>&1 &
+          server_pid=$!
+          ok=0
+
+          for _ in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/ >/tmp/page.html; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            cat /tmp/seseragi-ssr-demo.log
+            exit 1
+          fi
+
+          wait "$server_pid"
+
+          grep -q '<!doctype html>' /tmp/page.html
+          grep -q 'Rendered on the server' /tmp/page.html
+          grep -q 'Seseragi SSR' /tmp/page.html
