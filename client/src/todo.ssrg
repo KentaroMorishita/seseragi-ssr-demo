@@ -11,7 +11,7 @@ import { Todo } from "./model"
 import * as styles from "./styles"
 import * as api from "./api"
 
-type ClientAction =
+type Action =
   | ClientDraftChanged String
   | ClientAddTodo
   | ClientToggleTodo Int
@@ -50,7 +50,7 @@ fn statusText todo: Todo -> String =
 fn todoTitleStyle todo: Todo -> html.Style =
   if todo.completed then styles.completedTitleStyle () else styles.todoTitleStyle ()
 
-fn todoItem todo: Todo -> html.Html<ClientAction> =
+fn todoItem todo: Todo -> html.Html<Action> =
   html.li {
     style: styles.todoItemStyle (),
     children: [
@@ -73,14 +73,14 @@ fn todoItem todo: Todo -> html.Html<ClientAction> =
     ]
   }
 
-fn todoList todos: Array<Todo> -> html.Html<ClientAction> =
+fn todoList todos: Array<Todo> -> html.Html<Action> =
   html.ul {
     id: "todo-list",
     style: styles.todoListStyle (),
     children: map todoItem todos
   }
 
-fn todoView todos: Array<Todo> -> draft: String -> html.Html<ClientAction> =
+fn todoView todos: Array<Todo> -> draft: String -> html.Html<Action> =
   html.section {
     id: "todo-app",
     style: styles.todoCardStyle (),
@@ -138,11 +138,11 @@ fn todoView todos: Array<Todo> -> draft: String -> html.Html<ClientAction> =
     ]
   }
 
-fn region todos: Array<Todo> -> dom.DomContent<ClientAction> =
+fn region todos: Array<Todo> -> dom.DomContent<Action> =
   dom.content (todoList todos) []
 
-fn dispatch actions: queue.Queue<ClientAction>
-  -> action: ClientAction
+fn dispatch actions: queue.Queue<Action>
+  -> action: Action
   -> Effect<{}, String, Unit> =
   queue.offer action actions
   |> effects.mapError queueFailure
@@ -219,7 +219,7 @@ fails String =
   }
 
 pub effect fn worker origin: String
-  -> actions: queue.Queue<ClientAction>
+  -> actions: queue.Queue<Action>
   -> todos: MutableSignal<Array<Todo>>
   -> draft: MutableSignal<String>
   -> Unit
@@ -245,10 +245,10 @@ fails String =
     initial <- api.list origin
     todos <- signals.make initial |> effects.mapError neverFailure
     draft <- signals.make "" |> effects.mapError neverFailure
-    actions <- queue.unbounded<ClientAction> () |> effects.mapError neverFailure
+    actions <- queue.unbounded<Action> () |> effects.mapError neverFailure
 
     let listRegion = signals.map region todos
-    let bindings: Array<dom.DomBinding<ClientAction>> = [
+    let bindings: Array<dom.DomBinding<Action>> = [
       dom.bindValue "#todo-input" draft,
       dom.bindRegion "#todo-list" listRegion
     ]
