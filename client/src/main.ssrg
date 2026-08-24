@@ -110,7 +110,7 @@ fn handle state: MutableSignal<Int> -> action: Action -> Task<Unit> =
     Reset -> signals.set 0 state
   }
 
-let hydrationOptions: dom.DomOptions = {
+let hydrationOptions: dom.DomOptions = dom.DomOptions {
   eventCapacity: 1024,
   hydration: dom.HydrateStrict,
   cleanup: dom.PreserveRenderedDom
