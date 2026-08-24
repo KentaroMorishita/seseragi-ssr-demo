@@ -58,7 +58,17 @@ jobs:
           grep -q '/hello-ssr' /tmp/page.html
 
       - name: Bundle Vercel Bun function
+        shell: bash
         run: |
+          set -euo pipefail
+
+          view_module="$(grep -R -l --include='*.ts' 'export const render =' generated | head -n 1)"
+          test -n "$view_module"
+
+          mkdir -p api
+          sed "s|__SESERAGI_VIEW_MODULE__|../$view_module|" \
+            vercel/entry.ts > api/index.ts
+
           bun build api/index.ts \
             --target=bun \
             --outfile=/tmp/seseragi-ssr-vercel.js
@@ -69,6 +79,34 @@ jobs:
 
           test -f api/index.js
           grep -q 'Bun' api/index.js
+
+      - name: Prove Vercel bundle runs on Bun
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          bun api/index.js >/tmp/seseragi-vercel-bundle.log 2>&1 &
+          server_pid=$!
+          ok=0
+
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/vercel-bun >/tmp/vercel-page.html; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            cat /tmp/seseragi-vercel-bundle.log
+            exit 1
+          fi
+
+          grep -q '<!doctype html>' /tmp/vercel-page.html
+          grep -q 'Rendered on the server' /tmp/vercel-page.html
+          grep -q '/vercel-bun' /tmp/vercel-page.html
 
       - name: Deploy to Vercel
         if: github.event_name != 'pull_request' && env.VERCEL_TOKEN != ''
