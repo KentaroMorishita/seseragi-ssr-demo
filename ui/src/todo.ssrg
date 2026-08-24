@@ -1,0 +1,108 @@
+import * as html from "std/web/html"
+import * as styles from "./styles"
+
+pub struct Todo {
+  id: Int,
+  title: String,
+  completed: Bool,
+}
+
+pub type Action =
+  | DraftChanged String
+  | AddTodo
+  | ToggleTodo Int
+  | DeleteTodo Int
+
+fn statusText todo: Todo -> String =
+  if todo.completed then "Done" else "Open"
+
+fn todoTitleStyle todo: Todo -> html.Style =
+  if todo.completed then styles.completedTitleStyle () else styles.todoTitleStyle ()
+
+fn todoItem todo: Todo -> html.Html<Action> =
+  html.li {
+    style: styles.todoItemStyle (),
+    children: [
+      html.button {
+        buttonType: "button",
+        style: styles.toggleButtonStyle todo.completed,
+        onClick: ToggleTodo todo.id,
+        children: statusText todo
+      },
+      html.p {
+        style: todoTitleStyle todo,
+        children: todo.title
+      },
+      html.button {
+        buttonType: "button",
+        style: styles.deleteButtonStyle (),
+        onClick: DeleteTodo todo.id,
+        children: "Delete"
+      }
+    ]
+  }
+
+pub fn list todos: Array<Todo> -> html.Html<Action> =
+  html.ul {
+    id: "todo-list",
+    style: styles.todoListStyle (),
+    children: map todoItem todos
+  }
+
+pub fn view todos: Array<Todo> -> draft: String -> html.Html<Action> =
+  html.section {
+    id: "todo-app",
+    style: styles.todoCardStyle (),
+    children: [
+      html.div {
+        style: styles.todoHeaderStyle (),
+        children: [
+          html.div {
+            children: [
+              html.p {
+                style: styles.labelStyle (),
+                children: "SQLite-backed interaction"
+              },
+              html.h2 {
+                style: styles.todoHeadingStyle (),
+                children: "Things to do"
+              }
+            ]
+          },
+          html.span {
+            style: styles.databaseBadgeStyle (),
+            children: "SQLite"
+          }
+        ]
+      },
+      html.p {
+        style: styles.descriptionStyle (),
+        children: "The initial list is read from SQLite during SSR. After hydration, mutations go through the Seseragi HTTP server and the list region updates reactively."
+      },
+      html.div {
+        style: styles.composerStyle (),
+        children: [
+          html.input {
+            id: "todo-input",
+            inputType: "text",
+            value: draft,
+            placeholder: "Add a task",
+            autoComplete: "off",
+            style: styles.inputStyle (),
+            onInput: \event -> DraftChanged event.value
+          },
+          html.button {
+            buttonType: "button",
+            style: styles.addButtonStyle (),
+            onClick: AddTodo,
+            children: "Add"
+          }
+        ]
+      },
+      list todos,
+      html.p {
+        style: styles.noteStyle (),
+        children: "Ephemeral container SQLite · data may reset when the deployment or instance restarts."
+      }
+    ]
+  }
