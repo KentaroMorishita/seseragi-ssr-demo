@@ -1,3 +1,4 @@
+import * as effects from "std/effect"
 import * as sqlite from "sqlite"
 import { FileConfig, Statement } from "sqlite"
 import { Todo } from "ui"
@@ -16,16 +17,18 @@ fn todoDecoder -> sqlite.Decoder<Todo> =
     (sqlite.map2 todoStart (sqlite.int "id") (sqlite.string "title"))
     (sqlite.bool "completed")
 
-fn seed database: sqlite.Database -> id: Int -> title: String -> completed: Bool
+effect fn seed database: sqlite.Database -> id: Int -> title: String -> completed: Bool
   -> Unit
 with sqlite: sqlite.Sqlite
 fails sqlite.Error =
-  sqlite.execute database (
-    statement
-      "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
-      [sqlite.intValue id, sqlite.textValue title, sqlite.boolValue completed]
-  )
-  |> map (\_ -> ())
+  do {
+    _ <- sqlite.execute database (
+      statement
+        "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
+        [sqlite.intValue id, sqlite.textValue title, sqlite.boolValue completed]
+    )
+    effects.succeed ()
+  }
 
 pub effect fn open -> sqlite.Database
 with sqlite: sqlite.Sqlite
@@ -45,7 +48,7 @@ fails sqlite.Error =
     _ <- seed database 1 "Ship server-rendered HTML" True
     _ <- seed database 2 "Hydrate the Todo UI" True
     _ <- seed database 3 "Persist this list in SQLite" False
-    database
+    effects.succeed database
   }
 
 pub effect fn list database: sqlite.Database -> Array<Todo>
@@ -57,7 +60,7 @@ fails sqlite.Error =
         "select id, title, completed from todos order by id desc"
         (sqlite.emptyValues ())
     ) (todoDecoder ())
-    result.rows
+    effects.succeed result.rows
   }
 
 pub effect fn create database: sqlite.Database -> title: String -> Array<Todo>
