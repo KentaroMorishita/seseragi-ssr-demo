@@ -92,8 +92,18 @@ fn parseTodoId request: http.HttpServerRequest -> Either<String, Int> =
       }
   }
 
-fn sqlitePure<A> value: A -> Effect<{}, sqlite.Error, A> =
-  effects.fromEither (Right value)
+fn sqliteResult<A> value: A =
+  if False then
+    Left (DriverFailure (DriverError {
+      operation: "pure",
+      code: "UNREACHABLE",
+      message: "unreachable",
+    }))
+  else
+    Right value
+
+fn sqlitePure<A> value: A =
+  effects.fromEither (sqliteResult value)
 
 effect fn openDatabase =
   do {
