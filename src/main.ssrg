@@ -13,12 +13,12 @@ fn responseFor request: http.HttpServerRequest -> http.HttpServerResponse = {
 
   if path == "/health" then
     http.textResponse 200 [] "ok"
-  else if path == "/" then
+  else if http.requestMethod request == "GET" then
     http.textResponse 200
       [http.header "content-type" "text/html; charset=utf-8"]
       (render path)
   else
-    http.textResponse 404 [] "not found"
+    http.textResponse 405 [] "method not allowed"
 }
 
 let handler: http.Handler<{}, Never> =
