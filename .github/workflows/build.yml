@@ -31,7 +31,7 @@ jobs:
           ok=0
 
           for _ in $(seq 1 60); do
-            if curl --fail --silent --show-error http://127.0.0.1:3000/ >/tmp/page.html; then
+            if curl --fail --silent --show-error http://127.0.0.1:3000/hello-ssr >/tmp/page.html; then
               ok=1
               break
             fi
@@ -48,3 +48,4 @@ jobs:
           grep -q '<!doctype html>' /tmp/page.html
           grep -q 'Rendered on the server' /tmp/page.html
           grep -q 'Seseragi SSR' /tmp/page.html
+          grep -q '/hello-ssr' /tmp/page.html
