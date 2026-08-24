@@ -24,6 +24,11 @@ struct TodoIdCommand {
   id: Int,
 }
 
+struct FixedResponse {
+  context: RequestContext,
+  response: http.HttpServerResponse,
+}
+
 fn syntheticError operation: String -> code: String -> message: String -> sqlite.Error =
   DriverFailure (DriverError {
     operation: operation,
@@ -88,8 +93,7 @@ fn parseTodoId request: http.HttpServerRequest -> Either<String, Int> =
   }
 
 fn sqlitePure<A> value: A -> Effect<{}, sqlite.Error, A> =
-  effects.succeed value
-  |> effects.mapError neverFailure
+  effects.fromEither (Right value)
 
 effect fn openDatabase =
   do {
@@ -128,11 +132,10 @@ effect fn listTodos database: sqlite.Database =
     sqlitePure result.rows
   }
 
-effect fn fixedResponse context: RequestContext
-  -> response: http.HttpServerResponse =
+effect fn fixedResponse command: FixedResponse =
   do {
-    _ <- listTodos context.database
-    sqlitePure response
+    _ <- listTodos command.context.database
+    sqlitePure command.response
   }
 
 effect fn insertTodo command: CreateCommand =
@@ -148,10 +151,16 @@ effect fn insertTodo command: CreateCommand =
 
 effect fn createTodo context: RequestContext =
   match text.decodeUtf8 (http.requestBody context.request) {
-    Left _ -> fixedResponse context (badRequest "request body must be UTF-8")
+    Left _ -> fixedResponse (FixedResponse {
+      context: context,
+      response: badRequest "request body must be UTF-8",
+    })
     Right title ->
       if title == "" then
-        fixedResponse context (badRequest "title is required")
+        fixedResponse (FixedResponse {
+          context: context,
+          response: badRequest "title is required",
+        })
       else
         insertTodo (CreateCommand { context: context, title: title })
   }
@@ -169,7 +178,10 @@ effect fn toggleById command: TodoIdCommand =
 
 effect fn toggleTodo context: RequestContext =
   match parseTodoId context.request {
-    Left message -> fixedResponse context (badRequest message)
+    Left message -> fixedResponse (FixedResponse {
+      context: context,
+      response: badRequest message,
+    })
     Right id -> toggleById (TodoIdCommand { context: context, id: id })
   }
 
@@ -184,7 +196,10 @@ effect fn deleteById command: TodoIdCommand =
 
 effect fn deleteTodo context: RequestContext =
   match parseTodoId context.request {
-    Left message -> fixedResponse context (badRequest message)
+    Left message -> fixedResponse (FixedResponse {
+      context: context,
+      response: badRequest message,
+    })
     Right id -> deleteById (TodoIdCommand { context: context, id: id })
   }
 
@@ -205,7 +220,10 @@ effect fn responseFor context: RequestContext = {
   let path = http.requestPath context.request
 
   if path == "/health" then
-    fixedResponse context (http.textResponse 200 [] "ok")
+    fixedResponse (FixedResponse {
+      context: context,
+      response: http.textResponse 200 [] "ok",
+    })
   else if method == "GET" && path == "/api/todos" then
     listResponse context
   else if method == "POST" && path == "/api/todos" then
@@ -217,7 +235,10 @@ effect fn responseFor context: RequestContext = {
   else if method == "GET" then
     pageResponse context
   else
-    fixedResponse context (http.textResponse 405 [] "method not allowed")
+    fixedResponse (FixedResponse {
+      context: context,
+      response: http.textResponse 405 [] "method not allowed",
+    })
 }
 
 let handler =
