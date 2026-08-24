@@ -92,19 +92,6 @@ fn parseTodoId request: http.HttpServerRequest -> Either<String, Int> =
       }
   }
 
-fn sqliteResult<A> value: A =
-  if False then
-    Left (DriverFailure (DriverError {
-      operation: "pure",
-      code: "UNREACHABLE",
-      message: "unreachable",
-    }))
-  else
-    Right value
-
-fn sqlitePure<A> value: A =
-  effects.fromEither (sqliteResult value)
-
 effect fn openDatabase =
   do {
     database <- sqlite.openFile (FileConfig {
@@ -133,19 +120,19 @@ effect fn openDatabase =
         "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
         [sqlite.intValue 3, sqlite.textValue "Persist this list in SQLite", sqlite.boolValue False]
     )
-    sqlitePure database
+    sqlite.succeed database
   }
 
 effect fn listTodos database: sqlite.Database =
   do {
     result <- sqlite.query database (todosStatement ()) (todoDecoder ())
-    sqlitePure result.rows
+    sqlite.succeed result.rows
   }
 
 effect fn fixedResponse command: FixedResponse =
   do {
     _ <- listTodos command.context.database
-    sqlitePure command.response
+    sqlite.succeed command.response
   }
 
 effect fn insertTodo command: CreateCommand =
@@ -156,7 +143,7 @@ effect fn insertTodo command: CreateCommand =
         [sqlite.textValue command.title, sqlite.boolValue False]
     )
     todos <- listTodos command.context.database
-    sqlitePure (todosResponse todos)
+    sqlite.succeed (todosResponse todos)
   }
 
 effect fn createTodo context: RequestContext =
@@ -183,7 +170,7 @@ effect fn toggleById command: TodoIdCommand =
         [sqlite.intValue command.id]
     )
     todos <- listTodos command.context.database
-    sqlitePure (todosResponse todos)
+    sqlite.succeed (todosResponse todos)
   }
 
 effect fn toggleTodo context: RequestContext =
@@ -201,7 +188,7 @@ effect fn deleteById command: TodoIdCommand =
       statement "delete from todos where id = ?" [sqlite.intValue command.id]
     )
     todos <- listTodos command.context.database
-    sqlitePure (todosResponse todos)
+    sqlite.succeed (todosResponse todos)
   }
 
 effect fn deleteTodo context: RequestContext =
@@ -216,13 +203,13 @@ effect fn deleteTodo context: RequestContext =
 effect fn listResponse context: RequestContext =
   do {
     todos <- listTodos context.database
-    sqlitePure (todosResponse todos)
+    sqlite.succeed (todosResponse todos)
   }
 
 effect fn pageResponse context: RequestContext =
   do {
     todos <- listTodos context.database
-    sqlitePure (htmlResponse (http.requestPath context.request) todos)
+    sqlite.succeed (htmlResponse (http.requestPath context.request) todos)
   }
 
 effect fn responseFor context: RequestContext = {
