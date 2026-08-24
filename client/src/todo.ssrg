@@ -11,11 +11,11 @@ import { Todo } from "ui"
 import * as styles from "ui/styles"
 import * as api from "./api"
 
-type Action =
-  | DraftChanged String
-  | AddTodo
-  | ToggleTodo Int
-  | DeleteTodo Int
+type ClientAction =
+  | ClientDraftChanged String
+  | ClientAddTodo
+  | ClientToggleTodo Int
+  | ClientDeleteTodo Int
 
 struct DraftCommand {
   value: String,
@@ -50,14 +50,14 @@ fn statusText todo: Todo -> String =
 fn todoTitleStyle todo: Todo -> html.Style =
   if todo.completed then styles.completedTitleStyle () else styles.todoTitleStyle ()
 
-fn todoItem todo: Todo -> html.Html<Action> =
+fn todoItem todo: Todo -> html.Html<ClientAction> =
   html.li {
     style: styles.todoItemStyle (),
     children: [
       html.button {
         buttonType: "button",
         style: styles.toggleButtonStyle todo.completed,
-        onClick: ToggleTodo todo.id,
+        onClick: ClientToggleTodo todo.id,
         children: statusText todo
       },
       html.p {
@@ -67,20 +67,20 @@ fn todoItem todo: Todo -> html.Html<Action> =
       html.button {
         buttonType: "button",
         style: styles.deleteButtonStyle (),
-        onClick: DeleteTodo todo.id,
+        onClick: ClientDeleteTodo todo.id,
         children: "Delete"
       }
     ]
   }
 
-fn todoList todos: Array<Todo> -> html.Html<Action> =
+fn todoList todos: Array<Todo> -> html.Html<ClientAction> =
   html.ul {
     id: "todo-list",
     style: styles.todoListStyle (),
     children: map todoItem todos
   }
 
-fn todoView todos: Array<Todo> -> draft: String -> html.Html<Action> =
+fn todoView todos: Array<Todo> -> draft: String -> html.Html<ClientAction> =
   html.section {
     id: "todo-app",
     style: styles.todoCardStyle (),
@@ -120,12 +120,12 @@ fn todoView todos: Array<Todo> -> draft: String -> html.Html<Action> =
             placeholder: "Add a task",
             autoComplete: "off",
             style: styles.inputStyle (),
-            onInput: \event -> DraftChanged event.value
+            onInput: \event -> ClientDraftChanged event.value
           },
           html.button {
             buttonType: "button",
             style: styles.addButtonStyle (),
-            onClick: AddTodo,
+            onClick: ClientAddTodo,
             children: "Add"
           }
         ]
@@ -138,27 +138,33 @@ fn todoView todos: Array<Todo> -> draft: String -> html.Html<Action> =
     ]
   }
 
-fn region todos: Array<Todo> -> dom.DomContent<Action> =
+fn region todos: Array<Todo> -> dom.DomContent<ClientAction> =
   dom.content (todoList todos) []
 
-fn dispatch actions: queue.Queue<Action>
-  -> action: Action
+fn dispatch actions: queue.Queue<ClientAction>
+  -> action: ClientAction
   -> Effect<{}, String, Unit> =
   queue.offer action actions
   |> effects.mapError queueFailure
 
-fn httpClientRequirement -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
-  effects.service (\environment -> environment.httpClient)
+fn httpClientService
+  -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
+  effects.service (\environment: { httpClient: http.HttpClient } -> environment.httpClient)
 
-effect fn httpSuccess<A> value: A =
-  do {
-    _ <- httpClientRequirement () |> effects.mapError neverFailure
-    effects.succeed value |> effects.mapError neverFailure
-  }
+fn keepHttp<A> value: A -> _service: http.HttpClient -> A =
+  value
 
-effect fn setDraft command: DraftCommand =
+fn httpContext<A> value: A
+  -> Effect<{ httpClient: http.HttpClient }, String, A> =
+  httpClientService ()
+  |> map (keepHttp value)
+  |> effects.mapError neverFailure
+
+effect fn setDraft command: DraftCommand -> Unit
+with httpClient: http.HttpClient
+fails String =
   do {
-    _ <- httpClientRequirement () |> effects.mapError neverFailure
+    _ <- httpContext ()
     signals.set command.value command.draft
     |> effects.mapError neverFailure
   }
@@ -172,8 +178,8 @@ with httpClient: http.HttpClient
 fails String =
   do {
     next <- api.create origin title
-    _ <- signals.set next todos
-    signals.set "" draft
+    _ <- signals.set next todos |> effects.mapError neverFailure
+    signals.set "" draft |> effects.mapError neverFailure
   }
 
 effect fn applyAdd origin: String
@@ -183,9 +189,9 @@ effect fn applyAdd origin: String
 with httpClient: http.HttpClient
 fails String =
   do {
-    title <- signals.read draft
+    title <- signals.read draft |> effects.mapError neverFailure
     if title == "" then
-      httpSuccess ()
+      httpContext ()
     else
       insertTodo origin title todos draft
   }
@@ -198,7 +204,7 @@ with httpClient: http.HttpClient
 fails String =
   do {
     next <- api.toggle origin id
-    signals.set next todos
+    signals.set next todos |> effects.mapError neverFailure
   }
 
 effect fn applyDelete origin: String
@@ -209,11 +215,11 @@ with httpClient: http.HttpClient
 fails String =
   do {
     next <- api.delete origin id
-    signals.set next todos
+    signals.set next todos |> effects.mapError neverFailure
   }
 
 pub effect fn worker origin: String
-  -> actions: queue.Queue<Action>
+  -> actions: queue.Queue<ClientAction>
   -> todos: MutableSignal<Array<Todo>>
   -> draft: MutableSignal<String>
   -> Unit
@@ -222,10 +228,10 @@ fails String =
   do {
     action <- queue.take actions |> effects.mapError queueFailure
     _ <- match action {
-      DraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
-      AddTodo -> applyAdd origin todos draft
-      ToggleTodo id -> applyToggle origin todos id
-      DeleteTodo id -> applyDelete origin todos id
+      ClientDraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
+      ClientAddTodo -> applyAdd origin todos draft
+      ClientToggleTodo id -> applyToggle origin todos id
+      ClientDeleteTodo id -> applyDelete origin todos id
     }
     worker origin actions todos draft
   }
@@ -237,12 +243,12 @@ fails String =
     location <- navigation.current () |> effects.mapError navigationFailure
     let origin = navigation.locationUrl location |> navigation.urlOrigin
     initial <- api.list origin
-    todos <- signals.make initial
-    draft <- signals.make ""
-    actions <- queue.unbounded<Action> ()
+    todos <- signals.make initial |> effects.mapError neverFailure
+    draft <- signals.make "" |> effects.mapError neverFailure
+    actions <- queue.unbounded<ClientAction> () |> effects.mapError neverFailure
 
     let listRegion = signals.map region todos
-    let bindings: Array<dom.DomBinding<Action>> = [
+    let bindings: Array<dom.DomBinding<ClientAction>> = [
       dom.bindValue "#todo-input" draft,
       dom.bindRegion "#todo-list" listRegion
     ]
@@ -252,6 +258,7 @@ fails String =
       |> effects.mapError domQueryFailure
 
     _ <- effects.fork (worker origin actions todos draft)
+      |> effects.mapError neverFailure
 
     dom.runContent hydrationOptions target (dispatch actions) reactive
       |> effects.mapError domFailure
