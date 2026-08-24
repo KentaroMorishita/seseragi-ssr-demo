@@ -1,0 +1,35 @@
+import * as dom from "std/web/dom"
+import * as signals from "std/signal"
+import { DomOptions } from "std/web/dom"
+import { MutableSignal } from "std/signal"
+import { view as counterView } from "ui"
+
+type Action =
+  | Increment
+  | Reset
+
+fn handle state: MutableSignal<Int> -> action: Action -> Task<Unit> =
+  match action {
+    Increment -> signals.update (\value: Int -> value + 1) state
+    Reset -> signals.set 0 state
+  }
+
+let defaultDomOptions = dom.defaultOptions ()
+let hydrationOptions: DomOptions = DomOptions {
+  ...defaultDomOptions,
+  hydration: dom.HydrateStrict,
+  cleanup: dom.PreserveRenderedDom
+}
+
+pub effect fn run -> Unit with dom: dom.Dom fails String = do {
+  state <- signals.make 0
+  let countText = signals.map (\value: Int -> show value) state
+  let bindings: Array<dom.DomBinding<Action>> = [
+    dom.bindText "#counter-value" countText
+  ]
+  let reactive = dom.content (counterView Increment Reset 0) bindings
+  target <- dom.query "#counter-app"
+    |> mapError (\error: dom.DomError -> show error)
+  dom.runContent hydrationOptions target (handle state) reactive
+    |> mapError (\error: dom.DomRuntimeError<Never> -> show error)
+}

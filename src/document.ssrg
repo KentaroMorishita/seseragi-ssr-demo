@@ -1,0 +1,8 @@
+import * as html from "std/web/html"
+import { body } from "./page"
+
+let documentHead =
+  "<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"><title>Seseragi SSR Demo</title></head>"
+
+pub fn render path: String -> String =
+  `<!doctype html><html lang="en">${documentHead}${html.renderToString (body path)}</html>`

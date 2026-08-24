@@ -1,26 +1,28 @@
 # seseragi-ssr-demo
 
-A minimal server-side rendering + hydration demo written in Seseragi and deployed as a Vercel Bun Function.
+A server-side rendering + hydration demo written in Seseragi and deployed as a Vercel Bun Function.
 
-The initial UI is a pure `html.Html` tree and `html.renderToString` produces the HTML on the server. A small counter is already present in that first response with value `0`. In the browser, a second Seseragi web build attaches to the existing `#counter-app` subtree using `std/web/dom` with `HydrateStrict`, then typed `Action` values update a `MutableSignal<Int>`.
+The server and browser builds share the same pure counter view through a local Seseragi package. The first HTTP response already contains the complete counter markup with value `0`. The browser then hydrates that existing subtree with `HydrateStrict` and attaches a fine-grained `bindText` subscription to `#counter-value`.
+
+After hydration, clicking `+1` updates only the bound counter text. The surrounding counter layout and buttons are not replaced on each Signal publication.
 
 ```text
 HTTP request
     ↓
-Vercel Bun Function
-    ↓
-compiled Seseragi render
+Seseragi server render
     ↓
 complete SSR HTML (counter = 0)
     ↓
 browser loads /client.js
     ↓
-Seseragi std/web/dom HydrateStrict
+HydrateStrict reuses the existing DOM
     ↓
-existing DOM becomes interactive
+DomContent + bindText attaches Signal<Int> to #counter-value
+    ↓
+click → Action → Signal update → textContent update
 ```
 
-Locally, the server request boundary is Seseragi's `std/http/server`. On Vercel, a tiny Bun hosting adapter calls the same compiled Seseragi `render` function directly and also serves the compiled browser bundle.
+The page is responsive and the document includes a mobile viewport. Touch controls use 16px text, a minimum 44px hit area, and `touch-action: manipulation` so the demo behaves naturally on mobile browsers.
 
 ## Run locally
 
@@ -46,13 +48,19 @@ In another terminal:
 curl http://127.0.0.1:3000/hello-ssr
 ```
 
-The Vercel deployment additionally includes the browser hydration client built from `client/`.
+The local process uses `std/http/server`. The Vercel deployment uses a tiny Bun hosting adapter that calls the same compiled Seseragi `render` function and serves the compiled browser bundle.
 
 ## Production artifact
 
-CI tracks the current Seseragi `main` branch. It refreshes both package lockfiles, builds the process SSR artifact and browser hydration artifact, proves the generated process program runs directly on Bun, then bundles the server adapter, generated Seseragi SSR modules, runtime, and browser bundle into one self-contained Bun Function.
+CI tracks the current Seseragi `main` branch. It refreshes the package lock graph, builds both targets, proves the generated process artifact runs directly on Bun, then bundles the server render modules, runtime, and browser client into one Bun Function.
 
 ```text
+root process package                  client browser package
+        │                                      │
+        └─────── both depend on ui/ ───────────┘
+                         │
+                  shared pure counter
+
 src/*.ssrg                         client/src/*.ssrg
     ↓ seseragi build                   ↓ seseragi build
 process TypeScript + runtime       browser app.js
@@ -64,7 +72,7 @@ process TypeScript + runtime       browser app.js
                 Vercel Fluid Compute
 ```
 
-Rust is only required while compiling Seseragi source. The deployed application executes on Bun.
+Rust is required while compiling Seseragi source. The deployed application executes on Bun.
 
 `VERCEL_TOKEN` is stored as a GitHub Actions secret and pushes to `main` deploy to production automatically.
 
@@ -72,15 +80,26 @@ Rust is only required while compiling Seseragi source. The deployed application 
 
 ```text
 src/
-├── main.ssrg          # local Seseragi HTTP boundary
-└── view.ssrg          # pure Html tree + SSR rendering
+├── main.ssrg          # process entrypoint only
+├── server.ssrg        # std/http/server request boundary
+├── document.ssrg      # HTML document shell + mobile viewport
+├── page.ssrg          # pure page composition
+└── styles.ssrg        # responsive page styles
+
+ui/
+├── seseragi.toml      # shared local package
+└── src/
+    ├── counter.ssrg   # pure counter Html shared by SSR and browser
+    └── styles.ssrg    # shared counter styles
 
 client/
-├── seseragi.toml      # browser-target package
-└── src/main.ssrg      # HydrateStrict + typed counter actions
+├── seseragi.toml      # browser-target package + ui path dependency
+└── src/
+    ├── main.ssrg      # browser entrypoint only
+    └── counter.ssrg   # state, Action, HydrateStrict, DomContent, bindText
 
 vercel/
-└── entry.ts           # tiny Bun hosting adapter template
+└── entry.ts           # thin Bun hosting adapter template
 ```
 
-No JSX or external template engine is involved.
+No JSX, external template engine, component hook system, or whole-tree rerender is required for the counter update path.
