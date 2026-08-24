@@ -29,10 +29,10 @@ fn badRequest message: String -> http.HttpServerResponse =
 pub fn handler database: sqlite.Database
   -> http.Handler<{ sqlite: sqlite.Sqlite }, Never> =
   http.recoverHandler
-    (\_error: String ->
+    (\error: String ->
       http.textResponse 500
         [http.header "content-type" "text/plain; charset=utf-8"]
-        "SQLite operation failed"
+        error
     )
     (\request: http.HttpServerRequest -> {
       let method = http.requestMethod request
