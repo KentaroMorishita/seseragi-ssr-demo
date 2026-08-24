@@ -9,7 +9,6 @@ import {
   Database,
   Db,
   FileConfig,
-  Sqlite as SqliteService,
   Statement,
 } from "sqlite"
 import { Todo } from "ui"
