@@ -25,7 +25,8 @@ fn badRequest message: String -> http.HttpServerResponse =
     [http.header "content-type" "text/plain; charset=utf-8"]
     message
 
-pub fn handler database: sqlite.Database =
+pub fn handler database: sqlite.Database
+  -> http.Handler<{ sqlite: sqlite.Sqlite }, Never> =
   http.recoverHandler
     (\_error: sqlite.Error ->
       http.textResponse 500
