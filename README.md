@@ -1,11 +1,13 @@
 # seseragi-ssr-demo
 
-A minimal server-side rendering demo written in Seseragi.
+A minimal server-side rendering demo written in Seseragi and deployed as a Vercel Bun Function.
 
 The request is handled by `std/http/server`, the UI is built as a pure `html.Html` tree, and `html.renderToString` produces the response body on the server.
 
 ```text
 HTTP request
+    ↓
+Vercel Bun Function
     ↓
 std/http/server
     ↓
@@ -16,7 +18,7 @@ html.renderToString
 HTML response
 ```
 
-## Run
+## Run locally
 
 Install the current Seseragi CLI from the language repository:
 
@@ -36,17 +38,36 @@ seseragi run .
 In another terminal:
 
 ```sh
-curl http://127.0.0.1:3000/
+curl http://127.0.0.1:3000/hello-ssr
 ```
 
-The current HTTP server surface exposes `serveOnce`, so this demo intentionally handles one request and exits. It is a small proof of the SSR path rather than a production server.
+## Production artifact
+
+CI builds the process target into `generated/`, verifies that the generated artifact runs directly with Bun, then bundles the whole Seseragi application and runtime into one self-contained Vercel Bun Function.
+
+```text
+.ssrg
+  ↓  seseragi build (Rust compiler in CI)
+generated TypeScript + runtime
+  ↓  bun build
+self-contained Bun function
+  ↓
+Vercel Fluid Compute
+```
+
+Rust is only required while compiling Seseragi source. The deployed application executes on Bun.
+
+`VERCEL_TOKEN` is stored as a GitHub Actions secret and pushes to `main` deploy to production automatically.
 
 ## Structure
 
 ```text
 src/
-├── main.ssrg  # HTTP boundary
+├── main.ssrg  # Seseragi HTTP boundary
 └── view.ssrg  # pure Html tree + SSR rendering
+
+api/
+└── index.ts   # thin Vercel build entry; bundled away in CI
 ```
 
 No JSX or external template engine is involved.
