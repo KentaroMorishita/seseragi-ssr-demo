@@ -1,0 +1,126 @@
+import * as dom from "std/web/dom"
+import * as html from "std/web/html"
+import * as signals from "std/signal"
+import { MutableSignal } from "std/signal"
+
+type Action =
+  | Increment
+  | Reset
+
+fn labelStyle -> html.Style =
+  html.style {
+    color: "#7a8498",
+    fontSize: "13px",
+    fontWeight: "600",
+    letterSpacing: "0.08em",
+    margin: "0 0 8px",
+    textTransform: "uppercase",
+  }
+
+fn counterRowStyle -> html.Style =
+  html.style {
+    alignItems: "center",
+    display: "flex",
+    gap: "12px",
+    justifyContent: "space-between",
+    marginTop: "18px",
+  }
+
+fn countStyle -> html.Style =
+  html.style {
+    fontSize: "48px",
+    fontWeight: "700",
+    letterSpacing: "-0.04em",
+    margin: "0",
+  }
+
+fn buttonGroupStyle -> html.Style =
+  html.style {
+    display: "flex",
+    gap: "10px",
+  }
+
+fn primaryButtonStyle -> html.Style =
+  html.style {
+    backgroundColor: "#172033",
+    border: "0",
+    borderRadius: "12px",
+    color: "#ffffff",
+    cursor: "pointer",
+    fontSize: "16px",
+    fontWeight: "600",
+    padding: "12px 18px",
+  }
+
+fn secondaryButtonStyle -> html.Style =
+  html.style {
+    backgroundColor: "#eef2f7",
+    border: "0",
+    borderRadius: "12px",
+    color: "#344054",
+    cursor: "pointer",
+    fontSize: "16px",
+    fontWeight: "600",
+    padding: "12px 18px",
+  }
+
+fn view count: Int -> html.Html<Action> =
+  html.div {
+    children: [
+      html.p {
+        style: labelStyle (),
+        children: "Hydrated interaction"
+      },
+      html.p {
+        children: "This counter starts as server-rendered HTML, then Seseragi hydrates it in the browser."
+      },
+      html.div {
+        style: counterRowStyle (),
+        children: [
+          html.p {
+            id: "counter-value",
+            style: countStyle (),
+            children: `${count}`
+          },
+          html.div {
+            style: buttonGroupStyle (),
+            children: [
+              html.button {
+                id: "increment",
+                onClick: Increment,
+                style: primaryButtonStyle (),
+                children: "+1"
+              },
+              html.button {
+                id: "reset",
+                onClick: Reset,
+                style: secondaryButtonStyle (),
+                children: "Reset"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+
+fn handle state: MutableSignal<Int> -> action: Action -> Task<Unit> =
+  match action {
+    Increment -> signals.update (\value: Int -> value + 1) state
+    Reset -> signals.set 0 state
+  }
+
+let hydrationOptions: dom.DomOptions = {
+  eventCapacity: 1024,
+  hydration: dom.HydrateStrict,
+  cleanup: dom.PreserveRenderedDom
+}
+
+pub effect fn main -> Unit with dom: dom.Dom fails String = do {
+  state <- signals.make 0
+  let content = signals.map view state
+  target <- dom.query "#counter-app"
+    |> mapError (\error: dom.DomError -> show error)
+  dom.run hydrationOptions target (handle state) content
+    |> mapError (\error: dom.DomRuntimeError<Never> -> show error)
+}
