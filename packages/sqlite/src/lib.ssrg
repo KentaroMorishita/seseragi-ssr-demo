@@ -40,11 +40,15 @@ pub type Error deriving Show =
 
 pub alias Db<A> = Effect<{ sqlite: Sqlite }, Error, A>
 
-fn unavailable -> Error = DriverFailure (DriverError {
-  operation: "package",
-  code: "SQLITE_UNAVAILABLE",
-  message: "SQLite runtime operation was not linked",
-})
+pub fn failure operation: String -> code: String -> message: String -> Error =
+  DriverFailure (DriverError {
+    operation: operation,
+    code: code,
+    message: message,
+  })
+
+fn unavailable -> Error =
+  failure "package" "SQLITE_UNAVAILABLE" "SQLite runtime operation was not linked"
 
 fn impossible _error: Never -> Error =
   unavailable ()
