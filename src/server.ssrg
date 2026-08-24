@@ -224,7 +224,8 @@ fn responseFor context: RequestContext = {
     })
 }
 
-pub effect fn run =
+pub fn run
+  -> Effect<{ httpServer: http.HttpServer, sqlite: sqlite.Sqlite }, String, Unit> =
   do {
     database <- openDatabase ()
       |> effects.mapError (\_error: sqlite.Error -> "SQLite startup failed")
