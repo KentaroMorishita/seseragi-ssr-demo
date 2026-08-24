@@ -1,14 +1,12 @@
 import * as deferred from "std/deferred"
 import * as effects from "std/effect"
 import * as http from "std/http/server"
-import * as sqlite from "sqlite"
 import * as store from "./todo_store"
 import * as todoHttp from "./todo_http"
 
 pub effect fn main =
   do {
     database <- store.openDatabase ()
-      |> effects.mapError (\_error: sqlite.Error -> "SQLite startup failed")
     _ <- http.listen {
       hostname: "0.0.0.0",
       port: 3001,
