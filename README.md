@@ -2,18 +2,24 @@
 
 A minimal server-side rendering demo written in Seseragi and deployed as a Vercel Bun Function.
 
-The request is handled by `std/http/server`, the UI is built as a pure `html.Html` tree, and `html.renderToString` produces the response body on the server.
+The UI is a pure `html.Html` tree and `html.renderToString` produces the HTML on the server. Locally, the request boundary is Seseragi's `std/http/server`. On Vercel, a tiny Bun hosting adapter calls the same compiled Seseragi `render` function directly.
 
 ```text
+Local
 HTTP request
-    ↓
-Vercel Bun Function
     ↓
 std/http/server
     ↓
-view : String -> Html<Action>
+Seseragi render
     ↓
-html.renderToString
+HTML response
+
+Vercel
+HTTP request
+    ↓
+Bun Function adapter
+    ↓
+compiled Seseragi render
     ↓
 HTML response
 ```
@@ -43,7 +49,7 @@ curl http://127.0.0.1:3000/hello-ssr
 
 ## Production artifact
 
-CI builds the process target into `generated/`, verifies that the generated artifact runs directly with Bun, then bundles the whole Seseragi application and runtime into one self-contained Vercel Bun Function.
+CI builds the process target into `generated/` and first proves that the generated Seseragi program itself runs directly on Bun. It then locates the compiled `render` export, injects it into the Vercel Bun adapter, and bundles the adapter + generated Seseragi modules + runtime into one self-contained function.
 
 ```text
 .ssrg
@@ -63,11 +69,11 @@ Rust is only required while compiling Seseragi source. The deployed application 
 
 ```text
 src/
-├── main.ssrg  # Seseragi HTTP boundary
+├── main.ssrg  # local Seseragi HTTP boundary
 └── view.ssrg  # pure Html tree + SSR rendering
 
-api/
-└── index.ts   # thin Vercel build entry; bundled away in CI
+vercel/
+└── entry.ts   # tiny Bun hosting adapter template
 ```
 
 No JSX or external template engine is involved.
