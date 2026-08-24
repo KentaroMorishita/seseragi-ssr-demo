@@ -1,8 +1,4 @@
-import * as http from "std/http/server"
-import * as sqlite from "sqlite"
 import { run } from "./server"
 
-pub effect fn main -> Unit
-with httpServer: http.HttpServer, sqlite: sqlite.Sqlite
-fails String =
+pub effect fn main =
   run ()
