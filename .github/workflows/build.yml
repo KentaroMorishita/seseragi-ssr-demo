@@ -18,8 +18,32 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - name: Resolve current Seseragi main
+        id: seseragi-main
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git ls-remote https://github.com/KentaroMorishita/seseragi refs/heads/main | cut -f1)"
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Seseragi CLI
+        id: seseragi-cli-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cargo/bin/seseragi
+          key: seseragi-cli-${{ runner.os }}-${{ steps.seseragi-main.outputs.sha }}
+
       - name: Install latest Seseragi CLI
+        if: steps.seseragi-cli-cache.outputs.cache-hit != 'true'
         run: cargo install --git https://github.com/KentaroMorishita/seseragi --locked seseragi-cli
+
+      - name: Cache Seseragi CLI
+        if: steps.seseragi-cli-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cargo/bin/seseragi
+          key: seseragi-cli-${{ runner.os }}-${{ steps.seseragi-main.outputs.sha }}
 
       - name: Refresh lockfiles for current Seseragi main
         run: |
