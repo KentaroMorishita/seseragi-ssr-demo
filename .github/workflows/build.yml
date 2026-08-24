@@ -19,7 +19,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install Seseragi CLI
-        run: cargo install --git https://github.com/KentaroMorishita/seseragi --locked seseragi-cli
+        run: cargo install --git https://github.com/KentaroMorishita/seseragi --rev e414b059f2fe3e48344f1ab8a971d583521d8710 --locked seseragi-cli
 
       - name: Build Seseragi process artifact
         run: |
