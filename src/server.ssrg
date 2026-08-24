@@ -7,7 +7,6 @@ import * as sqlite from "sqlite"
 import * as text from "std/text"
 import {
   Database,
-  Db,
   FileConfig,
   Statement,
 } from "sqlite"
@@ -90,7 +89,7 @@ fn parseTodoId request: http.HttpServerRequest -> Either<String, Int> =
       }
   }
 
-fn openDatabase -> Db<Database> =
+fn openDatabase -> sqlite.Db<Database> =
   do {
     database <- sqlite.openFile (FileConfig {
       filename: "/tmp/seseragi-ssr-demo.sqlite",
@@ -121,19 +120,19 @@ fn openDatabase -> Db<Database> =
     sqlite.succeed database
   }
 
-fn listTodos database: Database -> Db<Array<Todo>> =
+fn listTodos database: Database -> sqlite.Db<Array<Todo>> =
   do {
     result <- sqlite.query database (todosStatement ()) (todoDecoder ())
     sqlite.succeed result.rows
   }
 
-fn fixedResponse command: FixedResponse -> Db<http.HttpServerResponse> =
+fn fixedResponse command: FixedResponse -> sqlite.Db<http.HttpServerResponse> =
   do {
     _ <- listTodos command.context.database
     sqlite.succeed command.response
   }
 
-fn insertTodo command: CreateCommand -> Db<http.HttpServerResponse> =
+fn insertTodo command: CreateCommand -> sqlite.Db<http.HttpServerResponse> =
   do {
     _ <- sqlite.execute command.context.database (
       statement
@@ -144,7 +143,7 @@ fn insertTodo command: CreateCommand -> Db<http.HttpServerResponse> =
     sqlite.succeed (todosResponse todos)
   }
 
-fn createTodo context: RequestContext -> Db<http.HttpServerResponse> =
+fn createTodo context: RequestContext -> sqlite.Db<http.HttpServerResponse> =
   match text.decodeUtf8 (http.requestBody context.request) {
     Left _ -> fixedResponse (FixedResponse {
       context: context,
@@ -160,7 +159,7 @@ fn createTodo context: RequestContext -> Db<http.HttpServerResponse> =
         insertTodo (CreateCommand { context: context, title: title })
   }
 
-fn toggleById command: TodoIdCommand -> Db<http.HttpServerResponse> =
+fn toggleById command: TodoIdCommand -> sqlite.Db<http.HttpServerResponse> =
   do {
     _ <- sqlite.execute command.context.database (
       statement
@@ -171,7 +170,7 @@ fn toggleById command: TodoIdCommand -> Db<http.HttpServerResponse> =
     sqlite.succeed (todosResponse todos)
   }
 
-fn toggleTodo context: RequestContext -> Db<http.HttpServerResponse> =
+fn toggleTodo context: RequestContext -> sqlite.Db<http.HttpServerResponse> =
   match parseTodoId context.request {
     Left message -> fixedResponse (FixedResponse {
       context: context,
@@ -180,7 +179,7 @@ fn toggleTodo context: RequestContext -> Db<http.HttpServerResponse> =
     Right id -> toggleById (TodoIdCommand { context: context, id: id })
   }
 
-fn deleteById command: TodoIdCommand -> Db<http.HttpServerResponse> =
+fn deleteById command: TodoIdCommand -> sqlite.Db<http.HttpServerResponse> =
   do {
     _ <- sqlite.execute command.context.database (
       statement "delete from todos where id = ?" [sqlite.intValue command.id]
@@ -189,7 +188,7 @@ fn deleteById command: TodoIdCommand -> Db<http.HttpServerResponse> =
     sqlite.succeed (todosResponse todos)
   }
 
-fn deleteTodo context: RequestContext -> Db<http.HttpServerResponse> =
+fn deleteTodo context: RequestContext -> sqlite.Db<http.HttpServerResponse> =
   match parseTodoId context.request {
     Left message -> fixedResponse (FixedResponse {
       context: context,
@@ -198,19 +197,19 @@ fn deleteTodo context: RequestContext -> Db<http.HttpServerResponse> =
     Right id -> deleteById (TodoIdCommand { context: context, id: id })
   }
 
-fn listResponse context: RequestContext -> Db<http.HttpServerResponse> =
+fn listResponse context: RequestContext -> sqlite.Db<http.HttpServerResponse> =
   do {
     todos <- listTodos context.database
     sqlite.succeed (todosResponse todos)
   }
 
-fn pageResponse context: RequestContext -> Db<http.HttpServerResponse> =
+fn pageResponse context: RequestContext -> sqlite.Db<http.HttpServerResponse> =
   do {
     todos <- listTodos context.database
     sqlite.succeed (htmlResponse (http.requestPath context.request) todos)
   }
 
-fn responseFor context: RequestContext -> Db<http.HttpServerResponse> = {
+fn responseFor context: RequestContext -> sqlite.Db<http.HttpServerResponse> = {
   let method = http.requestMethod context.request
   let path = http.requestPath context.request
 
