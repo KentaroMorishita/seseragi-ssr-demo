@@ -16,6 +16,11 @@ pub struct TodoById {
 fn statement sql: String -> values: Array<sqlite.Value> -> Statement =
   Statement { sql: sql, values: values }
 
+fn todosStatement -> Statement =
+  statement
+    "select id, title, completed from todos order by id desc"
+    (sqlite.emptyValues ())
+
 fn todoStart id: Int -> title: String -> (Bool -> Todo) =
   \completed -> Todo { id: id, title: title, completed: completed }
 
@@ -60,11 +65,7 @@ pub effect fn open _unit: Unit =
 
 pub effect fn list database: sqlite.Database =
   do {
-    result <- sqlite.query database (
-      statement
-        "select id, title, completed from todos order by id desc"
-        (sqlite.emptyValues ())
-    ) (todoDecoder ())
+    result <- sqlite.query database (todosStatement ()) (todoDecoder ())
     effects.succeed result.rows
   }
 
@@ -75,7 +76,8 @@ pub effect fn create command: CreateTodo =
         "insert into todos (title, completed) values (?, ?)"
         [sqlite.textValue command.title, sqlite.boolValue False]
     )
-    list command.database
+    result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
+    effects.succeed result.rows
   }
 
 pub effect fn toggle command: TodoById =
@@ -85,7 +87,8 @@ pub effect fn toggle command: TodoById =
         "update todos set completed = case completed when 0 then 1 else 0 end where id = ?"
         [sqlite.intValue command.id]
     )
-    list command.database
+    result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
+    effects.succeed result.rows
   }
 
 pub effect fn delete command: TodoById =
@@ -93,5 +96,6 @@ pub effect fn delete command: TodoById =
     _ <- sqlite.execute command.database (
       statement "delete from todos where id = ?" [sqlite.intValue command.id]
     )
-    list command.database
+    result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
+    effects.succeed result.rows
   }
