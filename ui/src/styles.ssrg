@@ -2,51 +2,92 @@ import * as html from "std/web/html"
 
 pub fn labelStyle -> html.Style =
   html.style {
-    color: "#7a8498",
-    fontSize: "13px",
-    fontWeight: "600",
+    color: "#667085",
+    fontSize: "12px",
+    fontWeight: "700",
     letterSpacing: "0.08em",
-    margin: "0 0 8px",
+    margin: "0 0 6px",
     textTransform: "uppercase",
   }
 
 pub fn descriptionStyle -> html.Style =
   html.style {
-    color: "#4f5b70",
-    fontSize: "16px",
-    lineHeight: "1.55",
-    margin: "0",
+    color: "#5f6b7d",
+    fontSize: "15px",
+    lineHeight: "1.65",
+    margin: "14px 0 0",
+    maxWidth: "720px",
   }
 
-pub fn counterRowStyle -> html.Style =
+pub fn todoCardStyle -> html.Style =
   html.style {
-    alignItems: "center",
+    backgroundColor: "#ffffff",
+    border: "1px solid #e1e7ef",
+    borderRadius: "24px",
+    boxSizing: "border-box",
+    marginTop: "20px",
+    padding: "clamp(20px, 5vw, 30px)",
+    width: "100%",
+  }
+
+pub fn todoHeaderStyle -> html.Style =
+  html.style {
+    alignItems: "flex-start",
     display: "flex",
     flexWrap: "wrap",
-    gap: "16px",
+    gap: "14px",
     justifyContent: "space-between",
-    marginTop: "20px",
   }
 
-pub fn countStyle -> html.Style =
+pub fn todoHeadingStyle -> html.Style =
   html.style {
-    fontSize: "clamp(42px, 12vw, 56px)",
+    color: "#172033",
+    fontSize: "clamp(24px, 6vw, 32px)",
     fontWeight: "700",
-    letterSpacing: "-0.04em",
-    lineHeight: "1",
+    letterSpacing: "-0.03em",
+    lineHeight: "1.15",
     margin: "0",
   }
 
-pub fn buttonGroupStyle -> html.Style =
+pub fn databaseBadgeStyle -> html.Style =
   html.style {
+    backgroundColor: "#ecfdf3",
+    border: "1px solid #abefc6",
+    borderRadius: "999px",
+    color: "#067647",
+    display: "inline-flex",
+    fontSize: "13px",
+    fontWeight: "700",
+    padding: "7px 10px",
+  }
+
+pub fn composerStyle -> html.Style =
+  html.style {
+    alignItems: "stretch",
     display: "flex",
     flexWrap: "wrap",
     gap: "10px",
-    marginLeft: "auto",
-    maxWidth: "100%",
+    marginTop: "22px",
+    width: "100%",
   }
 
-pub fn primaryButtonStyle -> html.Style =
+pub fn inputStyle -> html.Style =
+  html.style {
+    backgroundColor: "#f8fafc",
+    border: "1px solid #d7dee8",
+    borderRadius: "12px",
+    boxSizing: "border-box",
+    color: "#172033",
+    flex: "1 1 240px",
+    fontSize: "16px",
+    minHeight: "48px",
+    minWidth: "0",
+    outline: "none",
+    padding: "12px 14px",
+    width: "100%",
+  }
+
+pub fn addButtonStyle -> html.Style =
   html.style {
     alignItems: "center",
     backgroundColor: "#172033",
@@ -55,31 +96,105 @@ pub fn primaryButtonStyle -> html.Style =
     color: "#ffffff",
     cursor: "pointer",
     display: "inline-flex",
+    flex: "0 0 auto",
     fontSize: "16px",
-    fontWeight: "600",
+    fontWeight: "700",
     justifyContent: "center",
-    minHeight: "44px",
-    minWidth: "64px",
-    padding: "10px 18px",
+    minHeight: "48px",
+    minWidth: "82px",
+    padding: "11px 18px",
     touchAction: "manipulation",
     userSelect: "none",
   }
 
-pub fn secondaryButtonStyle -> html.Style =
+pub fn todoListStyle -> html.Style =
+  html.style {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    listStyle: "none",
+    margin: "22px 0 0",
+    padding: "0",
+  }
+
+pub fn todoItemStyle -> html.Style =
   html.style {
     alignItems: "center",
-    backgroundColor: "#eef2f7",
+    backgroundColor: "#f8fafc",
+    border: "1px solid #e5eaf1",
+    borderRadius: "14px",
+    boxSizing: "border-box",
+    display: "flex",
+    gap: "10px",
+    minHeight: "58px",
+    padding: "9px 10px",
+    width: "100%",
+  }
+
+pub fn todoTitleStyle -> html.Style =
+  html.style {
+    color: "#27364b",
+    flex: "1 1 auto",
+    fontSize: "16px",
+    lineHeight: "1.45",
+    margin: "0",
+    minWidth: "0",
+    overflowWrap: "anywhere",
+  }
+
+pub fn completedTitleStyle -> html.Style =
+  html.style {
+    color: "#8a94a6",
+    flex: "1 1 auto",
+    fontSize: "16px",
+    lineHeight: "1.45",
+    margin: "0",
+    minWidth: "0",
+    overflowWrap: "anywhere",
+    textDecoration: "line-through",
+  }
+
+pub fn toggleButtonStyle completed: Bool -> html.Style =
+  html.style {
+    alignItems: "center",
+    backgroundColor: if completed then "#e7f8ef" else "#eef2f7",
     border: "0",
-    borderRadius: "12px",
-    color: "#344054",
+    borderRadius: "10px",
+    color: if completed then "#067647" else "#475467",
     cursor: "pointer",
     display: "inline-flex",
-    fontSize: "16px",
-    fontWeight: "600",
+    flex: "0 0 auto",
+    fontSize: "14px",
+    fontWeight: "700",
     justifyContent: "center",
-    minHeight: "44px",
-    minWidth: "72px",
-    padding: "10px 18px",
+    minHeight: "40px",
+    minWidth: "58px",
+    padding: "8px 10px",
     touchAction: "manipulation",
-    userSelect: "none",
+  }
+
+pub fn deleteButtonStyle -> html.Style =
+  html.style {
+    alignItems: "center",
+    backgroundColor: "transparent",
+    border: "0",
+    borderRadius: "10px",
+    color: "#b42318",
+    cursor: "pointer",
+    display: "inline-flex",
+    flex: "0 0 auto",
+    fontSize: "14px",
+    fontWeight: "700",
+    justifyContent: "center",
+    minHeight: "40px",
+    padding: "8px 10px",
+    touchAction: "manipulation",
+  }
+
+pub fn noteStyle -> html.Style =
+  html.style {
+    color: "#8a94a6",
+    fontSize: "12px",
+    lineHeight: "1.5",
+    margin: "16px 0 0",
   }
