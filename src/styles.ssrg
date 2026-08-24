@@ -20,24 +20,42 @@ pub fn shellStyle -> html.Style =
     width: "100%",
   }
 
+pub fn badgeRowStyle -> html.Style =
+  html.style {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+    marginBottom: "24px",
+  }
+
 pub fn badgeStyle -> html.Style =
   html.style {
     backgroundColor: "#e8f0ff",
     borderRadius: "999px",
     color: "#315fc6",
     display: "inline-block",
-    fontSize: "14px",
-    fontWeight: "600",
-    marginBottom: "24px",
-    padding: "8px 12px",
+    fontSize: "13px",
+    fontWeight: "700",
+    padding: "8px 11px",
+  }
+
+pub fn sqliteBadgeStyle -> html.Style =
+  html.style {
+    backgroundColor: "#ecfdf3",
+    borderRadius: "999px",
+    color: "#067647",
+    display: "inline-block",
+    fontSize: "13px",
+    fontWeight: "700",
+    padding: "8px 11px",
   }
 
 pub fn titleStyle -> html.Style =
   html.style {
-    fontSize: "clamp(42px, 11vw, 86px)",
+    fontSize: "clamp(42px, 11vw, 82px)",
     fontWeight: "700",
     letterSpacing: "-0.05em",
-    lineHeight: "0.95",
+    lineHeight: "0.96",
     margin: "0",
     overflowWrap: "anywhere",
   }
@@ -49,37 +67,26 @@ pub fn leadStyle -> html.Style =
     lineHeight: "1.65",
     marginBottom: "clamp(28px, 6vw, 40px)",
     marginTop: "clamp(22px, 5vw, 28px)",
-    maxWidth: "680px",
+    maxWidth: "720px",
   }
 
 pub fn cardStyle -> html.Style =
   html.style {
     backgroundColor: "#ffffff",
     border: "1px solid #e2e7f0",
-    borderRadius: "clamp(18px, 4vw, 24px)",
+    borderRadius: "18px",
     boxSizing: "border-box",
-    padding: "clamp(20px, 5vw, 28px)",
-    width: "100%",
-  }
-
-pub fn interactiveCardStyle -> html.Style =
-  html.style {
-    backgroundColor: "#ffffff",
-    border: "1px solid #e2e7f0",
-    borderRadius: "clamp(18px, 4vw, 24px)",
-    boxSizing: "border-box",
-    marginTop: "20px",
-    padding: "clamp(20px, 5vw, 28px)",
+    padding: "18px 20px",
     width: "100%",
   }
 
 pub fn labelStyle -> html.Style =
   html.style {
     color: "#7a8498",
-    fontSize: "13px",
-    fontWeight: "600",
+    fontSize: "12px",
+    fontWeight: "700",
     letterSpacing: "0.08em",
-    margin: "0 0 8px",
+    margin: "0 0 7px",
     textTransform: "uppercase",
   }
 
@@ -87,7 +94,7 @@ pub fn pathStyle -> html.Style =
   html.style {
     color: "#172033",
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-    fontSize: "clamp(16px, 4vw, 20px)",
+    fontSize: "clamp(15px, 4vw, 18px)",
     margin: "0",
     overflowWrap: "anywhere",
   }
