@@ -4,21 +4,20 @@ import * as json from "std/json"
 import * as text from "std/text"
 import { Todo } from "ui"
 
-type TodoJson = { id: Int, title: String, completed: Bool }
-
 fn httpBuildFailure error: http.HttpBuildError -> String = "Invalid Todo HTTP request"
 fn httpFailure error: http.HttpError -> String = "Todo HTTP request failed"
 fn jsonFailure error: json.JsonReadError -> String = "Todo response JSON was invalid"
 fn textFailure error: text.Utf8DecodeError -> String = "Todo response was not UTF-8"
 
-fn toTodo value: TodoJson -> Todo =
+fn toTodo value: { id: Int, title: String, completed: Bool } -> Todo =
   Todo {
     id: value.id,
     title: value.title,
     completed: value.completed,
   }
 
-fn decodeTodoJson body: String -> Either<json.JsonReadError, Array<TodoJson>> =
+fn decodeTodoJson body: String
+  -> Either<json.JsonReadError, Array<{ id: Int, title: String, completed: Bool }>> =
   json.decodeString body
 
 effect fn url origin: String -> path: String -> http.HttpUrl
