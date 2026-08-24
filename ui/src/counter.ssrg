@@ -1,0 +1,45 @@
+import * as html from "std/web/html"
+import * as styles from "./styles"
+
+pub fn view<Action> increment: Action -> reset: Action -> count: Int -> html.Html<Action> =
+  html.div {
+    children: [
+      html.p {
+        style: styles.labelStyle (),
+        children: "Hydrated interaction"
+      },
+      html.p {
+        style: styles.descriptionStyle (),
+        children: "The initial markup is server-rendered. After hydration, only the bound counter text changes."
+      },
+      html.div {
+        style: styles.counterRowStyle (),
+        children: [
+          html.p {
+            id: "counter-value",
+            style: styles.countStyle (),
+            children: show count
+          },
+          html.div {
+            style: styles.buttonGroupStyle (),
+            children: [
+              html.button {
+                id: "increment",
+                buttonType: "button",
+                onClick: increment,
+                style: styles.primaryButtonStyle (),
+                children: "+1"
+              },
+              html.button {
+                id: "reset",
+                buttonType: "button",
+                onClick: reset,
+                style: styles.secondaryButtonStyle (),
+                children: "Reset"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
