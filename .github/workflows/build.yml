@@ -59,6 +59,22 @@ jobs:
           grep -q 'Rendered on the server' /tmp/page.html
           grep -q 'Seseragi SSR' /tmp/page.html
           grep -q '/hello-ssr' /tmp/page.html
+          grep -q 'counter-app' /tmp/page.html
+          grep -q 'Hydrated interaction' /tmp/page.html
+          grep -q '>0<' /tmp/page.html
+
+      - name: Build Seseragi browser hydration client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf client-dist
+          seseragi lock update client
+          seseragi build client --out-dir client-dist
+
+          test -f client-dist/assets/app.js
+          test -f client-dist/.seseragi-build.json
+          grep -q 'counter-app' client-dist/assets/app.js
 
       - name: Bundle Vercel Bun function
         shell: bash
@@ -69,7 +85,9 @@ jobs:
           test -n "$view_module"
 
           mkdir -p api
-          sed "s|__SESERAGI_VIEW_MODULE__|../$view_module|" \
+          sed \
+            -e "s|__SESERAGI_VIEW_MODULE__|../$view_module|" \
+            -e "s|__SESERAGI_CLIENT_MODULE__|../client-dist/assets/app.js|" \
             vercel/entry.ts > api/index.ts
 
           bun build api/index.ts \
@@ -77,11 +95,12 @@ jobs:
             --outfile=/tmp/seseragi-ssr-vercel.js
 
           rm -f api/index.ts
-          rm -rf generated
+          rm -rf generated client-dist
           cp /tmp/seseragi-ssr-vercel.js api/index.js
 
           test -f api/index.js
           grep -q 'Bun' api/index.js
+          grep -q 'counter-app' api/index.js
 
       - name: Prove Vercel bundle runs on Bun
         shell: bash
@@ -107,9 +126,14 @@ jobs:
             exit 1
           fi
 
+          curl --fail --silent --show-error http://127.0.0.1:3000/client.js >/tmp/client.js
+
           grep -q '<!doctype html>' /tmp/vercel-page.html
           grep -q 'Rendered on the server' /tmp/vercel-page.html
           grep -q '/vercel-bun' /tmp/vercel-page.html
+          grep -q 'counter-app' /tmp/vercel-page.html
+          grep -q 'src="/client.js"' /tmp/vercel-page.html
+          grep -q 'counter-app' /tmp/client.js
 
       - name: Deploy to Vercel
         if: github.event_name != 'pull_request' && env.VERCEL_TOKEN != ''
