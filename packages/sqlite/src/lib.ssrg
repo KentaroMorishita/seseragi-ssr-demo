@@ -73,7 +73,7 @@ pub fn succeedString<A> value: A
 pub fn stringify<A> value: Effect<{ sqlite: Sqlite }, Error, A>
   -> Effect<{ sqlite: Sqlite }, String, A> =
   value
-  |> effects.mapError (\_error: Error -> "SQLite operation failed")
+  |> effects.mapError (\error: Error -> show error)
 
 pub fn textValue value: String -> Value = Value { token: () }
 pub fn intValue value: Int -> Value = Value { token: () }
