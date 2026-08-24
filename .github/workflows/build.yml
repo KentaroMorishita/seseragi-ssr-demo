@@ -65,7 +65,28 @@ jobs:
 
           bun generated/entry.ts >/tmp/seseragi-todo.log 2>&1 &
           server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "=== Seseragi server log ==="
+              cat /tmp/seseragi-todo.log || true
+            fi
+            kill "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          request() {
+            label="$1"
+            output="$2"
+            shift 2
+            echo "=== $label ==="
+            if ! curl --fail-with-body --show-error --silent "$@" >"$output"; then
+              echo "=== response body ==="
+              cat "$output" || true
+              return 1
+            fi
+          }
 
           ok=0
           for _ in $(seq 1 60); do
@@ -81,8 +102,10 @@ jobs:
             exit 1
           fi
 
-          curl --fail --silent http://127.0.0.1:3001/ >/tmp/page-before.html
-          curl --fail --silent http://127.0.0.1:3001/api/todos >/tmp/todos-before.json
+          request "SSR before mutations" /tmp/page-before.html \
+            http://127.0.0.1:3001/
+          request "Todo API before mutations" /tmp/todos-before.json \
+            http://127.0.0.1:3001/api/todos
 
           grep -q '<!doctype html>' /tmp/page-before.html
           grep -q 'Seseragi Todo' /tmp/page-before.html
@@ -96,24 +119,25 @@ jobs:
             if (!todos.some((todo) => todo.title === "Persist this list in SQLite" && todo.completed === false)) process.exit(1);
           '
 
-          curl --fail --silent \
+          request "Create Todo" /tmp/todos-created.json \
             -X POST \
             -H 'content-type: text/plain; charset=utf-8' \
             --data-binary 'CI Todo roundtrip' \
-            http://127.0.0.1:3001/api/todos >/tmp/todos-created.json
+            http://127.0.0.1:3001/api/todos
 
           bun -e '
             const todos = await Bun.file("/tmp/todos-created.json").json();
             if (!todos.some((todo) => todo.title === "CI Todo roundtrip" && todo.completed === false)) process.exit(1);
           '
 
-          curl --fail --silent http://127.0.0.1:3001/ >/tmp/page-after.html
+          request "SSR after create" /tmp/page-after.html \
+            http://127.0.0.1:3001/
           grep -q 'CI Todo roundtrip' /tmp/page-after.html
 
-          curl --fail --silent \
+          request "Toggle Todo" /tmp/todos-toggled.json \
             -X POST \
             --data-binary '3' \
-            http://127.0.0.1:3001/api/todos/toggle >/tmp/todos-toggled.json
+            http://127.0.0.1:3001/api/todos/toggle
 
           bun -e '
             const todos = await Bun.file("/tmp/todos-toggled.json").json();
@@ -121,10 +145,10 @@ jobs:
             if (!todo || todo.completed !== true) process.exit(1);
           '
 
-          curl --fail --silent \
+          request "Delete Todo" /tmp/todos-deleted.json \
             -X POST \
             --data-binary '3' \
-            http://127.0.0.1:3001/api/todos/delete >/tmp/todos-deleted.json
+            http://127.0.0.1:3001/api/todos/delete
 
           bun -e '
             const todos = await Bun.file("/tmp/todos-deleted.json").json();
