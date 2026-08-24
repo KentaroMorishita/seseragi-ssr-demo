@@ -249,7 +249,7 @@ pub effect fn run =
       hostname: "0.0.0.0",
       port: 3001,
       handler: http.recoverHandler
-        (\_error ->
+        (\_error: sqlite.Error ->
           http.textResponse 500
             [http.header "content-type" "text/plain; charset=utf-8"]
             "SQLite operation failed"
