@@ -1,4 +1,3 @@
-import * as effects from "std/effect"
 import * as sqlite from "sqlite"
 import { FileConfig, Statement } from "sqlite"
 import { Todo } from "ui"
@@ -32,9 +31,7 @@ fn todoDecoder -> sqlite.Decoder<Todo> =
     (sqlite.map2 todoStart (sqlite.int "id") (sqlite.string "title"))
     (sqlite.bool "completed")
 
-pub effect fn openDatabase -> sqlite.Database
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+pub fn openDatabase =
   do {
     database <- sqlite.openFile (FileConfig {
       filename: "/tmp/seseragi-ssr-demo.sqlite",
@@ -62,20 +59,16 @@ fails sqlite.Error =
         "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
         [sqlite.intValue 3, sqlite.textValue "Persist this list in SQLite", sqlite.boolValue False]
     )
-    effects.succeed database
+    sqlite.succeed database
   }
 
-pub effect fn list database: sqlite.Database -> Array<Todo>
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+pub fn list database: sqlite.Database =
   do {
     result <- sqlite.query database (todosStatement ()) (todoDecoder ())
-    effects.succeed result.rows
+    sqlite.succeed result.rows
   }
 
-pub effect fn create command: CreateTodo -> Array<Todo>
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+pub fn create command: CreateTodo =
   do {
     _ <- sqlite.execute command.database (
       statement
@@ -83,12 +76,10 @@ fails sqlite.Error =
         [sqlite.textValue command.title, sqlite.boolValue False]
     )
     result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
-    effects.succeed result.rows
+    sqlite.succeed result.rows
   }
 
-pub effect fn toggle command: TodoById -> Array<Todo>
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+pub fn toggle command: TodoById =
   do {
     _ <- sqlite.execute command.database (
       statement
@@ -96,16 +87,14 @@ fails sqlite.Error =
         [sqlite.intValue command.id]
     )
     result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
-    effects.succeed result.rows
+    sqlite.succeed result.rows
   }
 
-pub effect fn delete command: TodoById -> Array<Todo>
-with sqlite: sqlite.Sqlite
-fails sqlite.Error =
+pub fn delete command: TodoById =
   do {
     _ <- sqlite.execute command.database (
       statement "delete from todos where id = ?" [sqlite.intValue command.id]
     )
     result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
-    effects.succeed result.rows
+    sqlite.succeed result.rows
   }
