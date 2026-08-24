@@ -33,7 +33,7 @@ fn databaseError error: sqlite.Error -> http.HttpServerResponse =
     [http.header "content-type" "text/plain; charset=utf-8"]
     (`SQLite error: ${show error}`)
 
-fn createTodo database: sqlite.Database -> request: http.HttpServerRequest
+effect fn createTodo database: sqlite.Database -> request: http.HttpServerRequest
   -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
 fails sqlite.Error =
@@ -46,7 +46,7 @@ fails sqlite.Error =
         store.create database title |> map todosResponse
   }
 
-fn mutateTodo operation: (sqlite.Database -> Int -> Effect<{ sqlite: sqlite.Sqlite }, sqlite.Error, Array<Todo>>)
+effect fn mutateTodo operation: (sqlite.Database -> Int -> Effect<{ sqlite: sqlite.Sqlite }, sqlite.Error, Array<Todo>>)
   -> database: sqlite.Database
   -> request: http.HttpServerRequest
   -> http.HttpServerResponse
@@ -61,7 +61,7 @@ fails sqlite.Error =
       }
   }
 
-fn responseFor database: sqlite.Database -> request: http.HttpServerRequest
+effect fn responseFor database: sqlite.Database -> request: http.HttpServerRequest
   -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
 fails sqlite.Error = {
