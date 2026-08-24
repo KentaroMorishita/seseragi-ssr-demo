@@ -6,8 +6,24 @@ import * as queue from "std/queue"
 import * as signals from "std/signal"
 import { DomOptions } from "std/web/dom"
 import { MutableSignal } from "std/signal"
-import { Action, Todo, list as todoList, view as todoView } from "ui"
+import {
+  Action,
+  AddTodo,
+  DeleteTodo,
+  DraftChanged,
+  Todo,
+  ToggleTodo,
+  list as todoList,
+  view as todoView
+} from "ui"
 import * as api from "./api"
+
+struct WorkerState {
+  origin: String,
+  actions: queue.Queue<Action>,
+  todos: MutableSignal<Array<Todo>>,
+  draft: MutableSignal<String>,
+}
 
 let defaultDomOptions = dom.defaultOptions ()
 let hydrationOptions: DomOptions = DomOptions {
@@ -16,58 +32,79 @@ let hydrationOptions: DomOptions = DomOptions {
   cleanup: dom.PreserveRenderedDom
 }
 
-fn queueFailure error: queue.QueueClosed -> String = "Todo action queue closed"
-fn domQueryFailure error: dom.DomError -> String = "Todo DOM target unavailable"
-fn domFailure error: dom.DomRuntimeError<String> -> String = "Todo DOM runtime stopped"
+fn queueFailure _error: queue.QueueClosed -> String =
+  "Todo action queue closed"
+
+fn neverFailure _error: Never -> String =
+  "unreachable"
+
+fn domQueryFailure error: dom.DomError -> String =
+  show error
+
+fn domFailure error: dom.DomRuntimeError<String> -> String =
+  show error
+
 fn navigationFailure error: navigation.NavigationError -> String =
   navigation.errorMessage error
 
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
   dom.content (todoList todos) []
 
-fn dispatch draft: MutableSignal<String>
-  -> actions: queue.Queue<Action>
+fn dispatch actions: queue.Queue<Action>
   -> action: Action
   -> Effect<{}, String, Unit> =
-  match action {
-    DraftChanged value -> signals.set value draft
-    AddTodo -> queue.offer AddTodo actions |> effects.mapError queueFailure
-    ToggleTodo id -> queue.offer (ToggleTodo id) actions |> effects.mapError queueFailure
-    DeleteTodo id -> queue.offer (DeleteTodo id) actions |> effects.mapError queueFailure
-  }
+  queue.offer action actions
+  |> effects.mapError queueFailure
 
-pub effect fn worker origin: String
-  -> actions: queue.Queue<Action>
-  -> todos: MutableSignal<Array<Todo>>
+fn setDraft value: String
   -> draft: MutableSignal<String>
-  -> Unit
+  -> Effect<{}, String, Unit> =
+  signals.set value draft
+  |> effects.mapError neverFailure
+
+effect fn applyAdd state: WorkerState -> Unit
 with httpClient: http.HttpClient
 fails String =
   do {
-    action <- queue.take actions |> effects.mapError queueFailure
+    title <- signals.read state.draft
+    if title == "" then
+      effects.succeed ()
+    else
+      do {
+        next <- api.create state.origin title
+        _ <- signals.set next state.todos
+        signals.set "" state.draft
+      }
+  }
+
+effect fn applyToggle state: WorkerState -> id: Int -> Unit
+with httpClient: http.HttpClient
+fails String =
+  do {
+    next <- api.toggle state.origin id
+    signals.set next state.todos
+  }
+
+effect fn applyDelete state: WorkerState -> id: Int -> Unit
+with httpClient: http.HttpClient
+fails String =
+  do {
+    next <- api.delete state.origin id
+    signals.set next state.todos
+  }
+
+pub effect fn worker state: WorkerState -> Unit
+with httpClient: http.HttpClient
+fails String =
+  do {
+    action <- queue.take state.actions |> effects.mapError queueFailure
     _ <- match action {
-      DraftChanged value -> signals.set value draft
-      AddTodo -> do {
-        title <- signals.read draft
-        if title == "" then
-          effects.succeed ()
-        else
-          do {
-            next <- api.create origin title
-            _ <- signals.set next todos
-            signals.set "" draft
-          }
-      }
-      ToggleTodo id -> do {
-        next <- api.toggle origin id
-        signals.set next todos
-      }
-      DeleteTodo id -> do {
-        next <- api.delete origin id
-        signals.set next todos
-      }
+      DraftChanged value -> setDraft value state.draft
+      AddTodo -> applyAdd state
+      ToggleTodo id -> applyToggle state id
+      DeleteTodo id -> applyDelete state id
     }
-    worker origin actions todos draft
+    worker state
   }
 
 pub effect fn run -> Unit
@@ -87,12 +124,18 @@ fails String =
       dom.bindRegion "#todo-list" listRegion
     ]
     let reactive = dom.content (todoView initial "") bindings
+    let state = WorkerState {
+      origin: origin,
+      actions: actions,
+      todos: todos,
+      draft: draft,
+    }
 
     target <- dom.query "#todo-app"
       |> effects.mapError domQueryFailure
 
-    _ <- effects.fork (worker origin actions todos draft)
+    _ <- effects.fork (worker state)
 
-    dom.runContent hydrationOptions target (dispatch draft actions) reactive
+    dom.runContent hydrationOptions target (dispatch actions) reactive
       |> effects.mapError domFailure
   }
