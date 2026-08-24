@@ -1,28 +1,26 @@
 # seseragi-ssr-demo
 
-A minimal server-side rendering demo written in Seseragi and deployed as a Vercel Bun Function.
+A minimal server-side rendering + hydration demo written in Seseragi and deployed as a Vercel Bun Function.
 
-The UI is a pure `html.Html` tree and `html.renderToString` produces the HTML on the server. Locally, the request boundary is Seseragi's `std/http/server`. On Vercel, a tiny Bun hosting adapter calls the same compiled Seseragi `render` function directly.
+The initial UI is a pure `html.Html` tree and `html.renderToString` produces the HTML on the server. A small counter is already present in that first response with value `0`. In the browser, a second Seseragi web build attaches to the existing `#counter-app` subtree using `std/web/dom` with `HydrateStrict`, then typed `Action` values update a `MutableSignal<Int>`.
 
 ```text
-Local
 HTTP request
     ↓
-std/http/server
-    ↓
-Seseragi render
-    ↓
-HTML response
-
-Vercel
-HTTP request
-    ↓
-Bun Function adapter
+Vercel Bun Function
     ↓
 compiled Seseragi render
     ↓
-HTML response
+complete SSR HTML (counter = 0)
+    ↓
+browser loads /client.js
+    ↓
+Seseragi std/web/dom HydrateStrict
+    ↓
+existing DOM becomes interactive
 ```
+
+Locally, the server request boundary is Seseragi's `std/http/server`. On Vercel, a tiny Bun hosting adapter calls the same compiled Seseragi `render` function directly and also serves the compiled browser bundle.
 
 ## Run locally
 
@@ -35,9 +33,10 @@ cargo install \
   seseragi-cli
 ```
 
-Then run the demo:
+Then run the SSR process demo:
 
 ```sh
+seseragi lock update
 seseragi run .
 ```
 
@@ -47,18 +46,22 @@ In another terminal:
 curl http://127.0.0.1:3000/hello-ssr
 ```
 
+The Vercel deployment additionally includes the browser hydration client built from `client/`.
+
 ## Production artifact
 
-CI builds the process target into `generated/` and first proves that the generated Seseragi program itself runs directly on Bun. It then locates the compiled `render` export, injects it into the Vercel Bun adapter, and bundles the adapter + generated Seseragi modules + runtime into one self-contained function.
+CI tracks the current Seseragi `main` branch. It refreshes both package lockfiles, builds the process SSR artifact and browser hydration artifact, proves the generated process program runs directly on Bun, then bundles the server adapter, generated Seseragi SSR modules, runtime, and browser bundle into one self-contained Bun Function.
 
 ```text
-.ssrg
-  ↓  seseragi build (Rust compiler in CI)
-generated TypeScript + runtime
-  ↓  bun build
-self-contained Bun function
-  ↓
-Vercel Fluid Compute
+src/*.ssrg                         client/src/*.ssrg
+    ↓ seseragi build                   ↓ seseragi build
+process TypeScript + runtime       browser app.js
+           \                         /
+            └────── bun build ──────┘
+                       ↓
+              self-contained Bun Function
+                       ↓
+                Vercel Fluid Compute
 ```
 
 Rust is only required while compiling Seseragi source. The deployed application executes on Bun.
@@ -69,11 +72,15 @@ Rust is only required while compiling Seseragi source. The deployed application 
 
 ```text
 src/
-├── main.ssrg  # local Seseragi HTTP boundary
-└── view.ssrg  # pure Html tree + SSR rendering
+├── main.ssrg          # local Seseragi HTTP boundary
+└── view.ssrg          # pure Html tree + SSR rendering
+
+client/
+├── seseragi.toml      # browser-target package
+└── src/main.ssrg      # HydrateStrict + typed counter actions
 
 vercel/
-└── entry.ts   # tiny Bun hosting adapter template
+└── entry.ts           # tiny Bun hosting adapter template
 ```
 
 No JSX or external template engine is involved.
