@@ -1,4 +1,5 @@
 import * as bytes from "std/bytes"
+import * as effects from "std/effect"
 
 pub opaque struct Sqlite { token: Unit }
 pub opaque struct Database { token: Unit }
@@ -42,6 +43,9 @@ fn unavailable -> Error = DriverFailure (DriverError {
   code: "SQLITE_UNAVAILABLE",
   message: "SQLite runtime operation was not linked",
 })
+
+pub fn succeed<A> value: A -> Effect<{}, Error, A> =
+  effects.fromEither (Right value)
 
 pub fn textValue value: String -> Value = Value { token: () }
 pub fn intValue value: Int -> Value = Value { token: () }
