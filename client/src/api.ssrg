@@ -13,13 +13,13 @@ fn toTodo value: { id: Int, title: String, completed: Bool } -> Todo =
     completed: value.completed,
   }
 
-fn url origin: String -> path: String -> http.HttpUrl
+effect fn url origin: String -> path: String -> http.HttpUrl
 fails String =
   http.parseUrl (`${origin}${path}`)
   |> effects.fromEither
   |> effects.mapError errorText
 
-fn decodeTodos body: String -> Array<Todo>
+effect fn decodeTodos body: String -> Array<Todo>
 fails String =
   do {
     values <- json.decodeString body
@@ -28,7 +28,7 @@ fails String =
     effects.succeed (map toTodo values)
   }
 
-fn responseTodos response: http.HttpResponse -> Array<Todo>
+effect fn responseTodos response: http.Response -> Array<Todo>
 fails String =
   do {
     body <- http.responseBody response
@@ -51,7 +51,7 @@ fails String =
     responseTodos response
   }
 
-fn post origin: String -> path: String -> body: String -> Array<Todo>
+effect fn post origin: String -> path: String -> body: String -> Array<Todo>
 with httpClient: http.HttpClient
 fails String =
   do {
