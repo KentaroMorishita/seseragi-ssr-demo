@@ -1,4 +1,3 @@
-import * as effects from "std/effect"
 import * as sqlite from "sqlite"
 import { FileConfig, Statement } from "sqlite"
 import { Todo } from "ui"
@@ -34,13 +33,11 @@ fn todoDecoder -> sqlite.Decoder<Todo> =
 
 pub fn succeed<A> value: A
   -> Effect<{ sqlite: sqlite.Sqlite }, String, A> =
-  effects.service (\environment: { sqlite: sqlite.Sqlite } -> environment.sqlite)
-  |> map (\_service -> value)
-  |> effects.mapError (\_error: Never -> "unreachable")
+  sqlite.succeedString value
 
 pub fn openDatabase
   -> Effect<{ sqlite: sqlite.Sqlite }, String, sqlite.Database> =
-  do {
+  sqlite.stringify $ do {
     database <- sqlite.openFile (FileConfig {
       filename: "/tmp/seseragi-ssr-demo.sqlite",
       readOnly: False,
@@ -69,19 +66,17 @@ pub fn openDatabase
     )
     sqlite.succeed database
   }
-  |> effects.mapError (\_error -> "SQLite operation failed")
 
 pub fn list database: sqlite.Database
   -> Effect<{ sqlite: sqlite.Sqlite }, String, Array<Todo>> =
-  do {
+  sqlite.stringify $ do {
     result <- sqlite.query database (todosStatement ()) (todoDecoder ())
     sqlite.succeed result.rows
   }
-  |> effects.mapError (\_error -> "SQLite operation failed")
 
 pub fn create command: CreateTodo
   -> Effect<{ sqlite: sqlite.Sqlite }, String, Array<Todo>> =
-  do {
+  sqlite.stringify $ do {
     _ <- sqlite.execute command.database (
       statement
         "insert into todos (title, completed) values (?, ?)"
@@ -90,11 +85,10 @@ pub fn create command: CreateTodo
     result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
     sqlite.succeed result.rows
   }
-  |> effects.mapError (\_error -> "SQLite operation failed")
 
 pub fn toggle command: TodoById
   -> Effect<{ sqlite: sqlite.Sqlite }, String, Array<Todo>> =
-  do {
+  sqlite.stringify $ do {
     _ <- sqlite.execute command.database (
       statement
         "update todos set completed = case completed when 0 then 1 else 0 end where id = ?"
@@ -103,15 +97,13 @@ pub fn toggle command: TodoById
     result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
     sqlite.succeed result.rows
   }
-  |> effects.mapError (\_error -> "SQLite operation failed")
 
 pub fn delete command: TodoById
   -> Effect<{ sqlite: sqlite.Sqlite }, String, Array<Todo>> =
-  do {
+  sqlite.stringify $ do {
     _ <- sqlite.execute command.database (
       statement "delete from todos where id = ?" [sqlite.intValue command.id]
     )
     result <- sqlite.query command.database (todosStatement ()) (todoDecoder ())
     sqlite.succeed result.rows
   }
-  |> effects.mapError (\_error -> "SQLite operation failed")
