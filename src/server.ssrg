@@ -248,9 +248,25 @@ pub effect fn run =
     _ <- http.listen {
       hostname: "0.0.0.0",
       port: 3001,
-      handler: handler database
+      handler: http.recoverHandler
+        (\_error ->
+          http.textResponse 500
+            [http.header "content-type" "text/plain; charset=utf-8"]
+            "SQLite operation failed"
+        )
+        (\request: http.HttpServerRequest ->
+          responseFor (RequestContext { database: database, request: request })
+        )
     }
-    |> effects.mapError serverFailure
-    keepAlive <- deferred.make<Never, Unit> () |> effects.mapError neverFailure
-    deferred.await keepAlive |> effects.mapError neverFailure
+    |> effects.mapError (\error: http.HttpServerError ->
+      sqlite.failure "http-server" "HTTP_SERVER" (http.errorMessage error)
+    )
+    keepAlive <- deferred.make<Never, Unit> ()
+      |> effects.mapError (\_error: Never ->
+        sqlite.failure "runtime" "NEVER" "unreachable failure"
+      )
+    deferred.await keepAlive
+      |> effects.mapError (\_error: Never ->
+        sqlite.failure "runtime" "NEVER" "unreachable failure"
+      )
   }
