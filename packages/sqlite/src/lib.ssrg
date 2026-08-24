@@ -53,6 +53,9 @@ fn unavailable -> Error =
 fn impossible _error: Never -> Error =
   unavailable ()
 
+fn impossibleString _error: Never -> String =
+  "unreachable"
+
 fn keep<A> value: A -> _sqlite: Sqlite -> A =
   value
 
@@ -60,6 +63,17 @@ pub fn succeed<A> value: A -> Db<A> =
   effects.service (\environment: { sqlite: Sqlite } -> environment.sqlite)
   |> map (keep value)
   |> effects.mapError impossible
+
+pub fn succeedString<A> value: A
+  -> Effect<{ sqlite: Sqlite }, String, A> =
+  effects.service (\environment: { sqlite: Sqlite } -> environment.sqlite)
+  |> map (keep value)
+  |> effects.mapError impossibleString
+
+pub fn stringify<A> value: Effect<{ sqlite: Sqlite }, Error, A>
+  -> Effect<{ sqlite: Sqlite }, String, A> =
+  value
+  |> effects.mapError (\_error: Error -> "SQLite operation failed")
 
 pub fn textValue value: String -> Value = Value { token: () }
 pub fn intValue value: Int -> Value = Value { token: () }
