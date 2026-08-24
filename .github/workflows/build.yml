@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   ssr:
     runs-on: ubuntu-latest
@@ -154,6 +158,36 @@ jobs:
             const todos = await Bun.file("/tmp/todos-deleted.json").json();
             if (todos.some((todo) => todo.id === 3)) process.exit(1);
           '
+
+      - name: Comment Todo runtime diagnostic
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '<!-- todo-runtime-diagnostic -->'
+            echo '### Todo runtime diagnostic'
+            echo
+            for file in \
+              /tmp/page-before.html \
+              /tmp/todos-before.json \
+              /tmp/todos-created.json \
+              /tmp/page-after.html \
+              /tmp/todos-toggled.json \
+              /tmp/todos-deleted.json \
+              /tmp/seseragi-todo.log; do
+              if [ -s "$file" ]; then
+                echo "#### $file"
+                echo '```text'
+                head -c 6000 "$file"
+                echo
+                echo '```'
+              fi
+            done
+          } >/tmp/todo-diagnostic.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/todo-diagnostic.md
 
       - name: Build Seseragi browser hydration client
         shell: bash
