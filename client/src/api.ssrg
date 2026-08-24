@@ -4,17 +4,22 @@ import * as json from "std/json"
 import * as text from "std/text"
 import { Todo } from "ui"
 
-fn httpBuildFailure error: http.HttpBuildError -> String = show error
-fn httpFailure error: http.HttpError -> String = show error
-fn jsonFailure error: json.JsonReadError -> String = show error
-fn textFailure error: text.Utf8DecodeError -> String = show error
+type TodoJson = { id: Int, title: String, completed: Bool }
 
-fn toTodo value: { id: Int, title: String, completed: Bool } -> Todo =
+fn httpBuildFailure error: http.HttpBuildError -> String = "Invalid Todo HTTP request"
+fn httpFailure error: http.HttpError -> String = "Todo HTTP request failed"
+fn jsonFailure error: json.JsonReadError -> String = "Todo response JSON was invalid"
+fn textFailure error: text.Utf8DecodeError -> String = "Todo response was not UTF-8"
+
+fn toTodo value: TodoJson -> Todo =
   Todo {
     id: value.id,
     title: value.title,
     completed: value.completed,
   }
+
+fn decodeTodoJson body: String -> Either<json.JsonReadError, Array<TodoJson>> =
+  json.decodeString body
 
 effect fn url origin: String -> path: String -> http.HttpUrl
 fails String =
@@ -25,7 +30,7 @@ fails String =
 effect fn decodeTodos body: String -> Array<Todo>
 fails String =
   do {
-    values <- json.decodeString body
+    values <- decodeTodoJson body
       |> effects.fromEither
       |> effects.mapError jsonFailure
     effects.succeed (map toTodo values)
@@ -46,9 +51,7 @@ with httpClient: http.HttpClient
 fails String =
   do {
     endpoint <- url origin "/api/todos"
-    request <- http.request http.get endpoint
-      |> effects.fromEither
-      |> effects.mapError httpBuildFailure
+    let request = http.request http.get endpoint
     response <- http.sendEmpty (http.defaultBodyLimit ()) request
       |> effects.mapError httpFailure
     responseTodos response
