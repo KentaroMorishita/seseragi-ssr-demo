@@ -1,0 +1,43 @@
+import * as html from "std/web/html"
+import { view as counterView } from "ui"
+import * as styles from "./styles"
+
+pub fn body path: String -> html.Html<Unit> =
+  html.body {
+    style: styles.pageStyle (),
+    children: html.main {
+      style: styles.shellStyle (),
+      children: [
+        html.span {
+          style: styles.badgeStyle (),
+          children: "Rendered on the server"
+        },
+        html.h1 {
+          style: styles.titleStyle (),
+          children: "Seseragi SSR"
+        },
+        html.p {
+          style: styles.leadStyle (),
+          children: "A pure Html tree is rendered on the server, then the browser hydrates the same markup and attaches fine-grained Signal bindings."
+        },
+        html.section {
+          style: styles.cardStyle (),
+          children: [
+            html.p {
+              style: styles.labelStyle (),
+              children: "Request path"
+            },
+            html.p {
+              style: styles.pathStyle (),
+              children: path
+            }
+          ]
+        },
+        html.section {
+          id: "counter-app",
+          style: styles.interactiveCardStyle (),
+          children: counterView () () 0
+        }
+      ]
+    }
+  }
