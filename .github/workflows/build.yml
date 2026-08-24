@@ -21,6 +21,13 @@ jobs:
       - name: Install Seseragi CLI
         run: cargo install --git https://github.com/KentaroMorishita/seseragi --locked seseragi-cli
 
+      - name: Generate lockfile for v0.18 probe
+        run: |
+          seseragi lock update
+          echo '--- seseragi.lock ---'
+          cat seseragi.lock
+          echo '--- end seseragi.lock ---'
+
       - name: Build Seseragi process artifact
         run: |
           rm -rf generated
