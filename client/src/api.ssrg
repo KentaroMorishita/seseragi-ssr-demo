@@ -1,0 +1,81 @@
+import * as effects from "std/effect"
+import * as http from "std/http"
+import * as json from "std/json"
+import * as text from "std/text"
+import { Todo } from "ui"
+
+fn errorText error -> String = show error
+
+fn toTodo value: { id: Int, title: String, completed: Bool } -> Todo =
+  Todo {
+    id: value.id,
+    title: value.title,
+    completed: value.completed,
+  }
+
+fn url origin: String -> path: String -> http.HttpUrl
+fails String =
+  http.parseUrl (`${origin}${path}`)
+  |> effects.fromEither
+  |> effects.mapError errorText
+
+fn decodeTodos body: String -> Array<Todo>
+fails String =
+  do {
+    values <- json.decodeString body
+      |> effects.fromEither
+      |> effects.mapError errorText
+    effects.succeed (map toTodo values)
+  }
+
+fn responseTodos response: http.HttpResponse -> Array<Todo>
+fails String =
+  do {
+    body <- http.responseBody response
+      |> text.decodeUtf8
+      |> effects.fromEither
+      |> effects.mapError errorText
+    decodeTodos body
+  }
+
+pub effect fn list origin: String -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  do {
+    endpoint <- url origin "/api/todos"
+    request <- http.request http.get endpoint
+      |> effects.fromEither
+      |> effects.mapError errorText
+    response <- http.sendEmpty (http.defaultBodyLimit ()) request
+      |> effects.mapError errorText
+    responseTodos response
+  }
+
+fn post origin: String -> path: String -> body: String -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  do {
+    endpoint <- url origin path
+    request <- http.request http.post endpoint
+      |> http.withRequestHeader "content-type" "text/plain; charset=utf-8"
+      |> effects.fromEither
+      |> effects.mapError errorText
+    response <- http.sendBytes (http.defaultBodyLimit ()) (text.encodeUtf8 body) request
+      |> effects.mapError errorText
+    responseTodos response
+  }
+
+pub effect fn create origin: String -> title: String -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  post origin "/api/todos" title
+
+pub effect fn toggle origin: String -> id: Int -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  post origin "/api/todos/toggle" (show id)
+
+pub effect fn delete origin: String -> id: Int -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  post origin "/api/todos/delete" (show id)
