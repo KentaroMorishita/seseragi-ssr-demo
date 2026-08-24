@@ -1,35 +1,40 @@
 import * as html from "std/web/html"
-import { view as counterView } from "ui"
+import { Action, Todo, view as todoView } from "ui"
 import * as styles from "./styles"
 
-pub type Action =
-  | Increment
-  | Reset
-
-pub fn body path: String -> html.Html<Action> =
+pub fn body path: String -> todos: Array<Todo> -> html.Html<Action> =
   html.body {
     style: styles.pageStyle (),
     children: html.main {
       style: styles.shellStyle (),
       children: [
-        html.span {
-          style: styles.badgeStyle (),
-          children: "Rendered on the server"
+        html.div {
+          style: styles.badgeRowStyle (),
+          children: [
+            html.span {
+              style: styles.badgeStyle (),
+              children: "SSR + Hydration"
+            },
+            html.span {
+              style: styles.sqliteBadgeStyle (),
+              children: "SQLite on Bun"
+            }
+          ]
         },
         html.h1 {
           style: styles.titleStyle (),
-          children: "Seseragi SSR"
+          children: "Seseragi Todo"
         },
         html.p {
           style: styles.leadStyle (),
-          children: "A pure Html tree is rendered on the server, then the browser hydrates the same markup and attaches fine-grained Signal bindings."
+          children: "The server reads SQLite before rendering this page. The browser then hydrates the same pure Html tree and sends Todo mutations back through Seseragi HTTP."
         },
         html.section {
           style: styles.cardStyle (),
           children: [
             html.p {
               style: styles.labelStyle (),
-              children: "Request path"
+              children: "SSR request path"
             },
             html.p {
               style: styles.pathStyle (),
@@ -37,11 +42,7 @@ pub fn body path: String -> html.Html<Action> =
             }
           ]
         },
-        html.section {
-          id: "counter-app",
-          style: styles.interactiveCardStyle (),
-          children: counterView Increment Reset 0
-        }
+        todoView todos ""
       ]
     }
   }
