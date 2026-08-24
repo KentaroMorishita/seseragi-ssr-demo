@@ -99,37 +99,42 @@ effect fn openDatabase -> sqlite.Database
 with sqlite: sqlite.Sqlite
 fails String =
   do {
-    database <- sqlite.openFile (FileConfig {
-      filename: "/tmp/seseragi-ssr-demo.sqlite",
-      readOnly: False,
-      create: True,
-      busyTimeoutMillis: 1000,
-    })
-    |> effects.mapError databaseFailure
-    _ <- sqlite.execute database (
-      statement
-        "create table if not exists todos (id integer primary key autoincrement, title text not null, completed integer not null default 0)"
-        (sqlite.emptyValues ())
-    )
-    |> effects.mapError databaseFailure
-    _ <- sqlite.execute database (
-      statement
-        "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
-        [sqlite.intValue 1, sqlite.textValue "Ship server-rendered HTML", sqlite.boolValue True]
-    )
-    |> effects.mapError databaseFailure
-    _ <- sqlite.execute database (
-      statement
-        "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
-        [sqlite.intValue 2, sqlite.textValue "Hydrate the Todo UI", sqlite.boolValue True]
-    )
-    |> effects.mapError databaseFailure
-    _ <- sqlite.execute database (
-      statement
-        "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
-        [sqlite.intValue 3, sqlite.textValue "Persist this list in SQLite", sqlite.boolValue False]
-    )
-    |> effects.mapError databaseFailure
+    database <-
+      sqlite.openFile (FileConfig {
+        filename: "/tmp/seseragi-ssr-demo.sqlite",
+        readOnly: False,
+        create: True,
+        busyTimeoutMillis: 1000,
+      })
+      |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute database (
+        statement
+          "create table if not exists todos (id integer primary key autoincrement, title text not null, completed integer not null default 0)"
+          (sqlite.emptyValues ())
+      )
+      |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute database (
+        statement
+          "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
+          [sqlite.intValue 1, sqlite.textValue "Ship server-rendered HTML", sqlite.boolValue True]
+      )
+      |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute database (
+        statement
+          "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
+          [sqlite.intValue 2, sqlite.textValue "Hydrate the Todo UI", sqlite.boolValue True]
+      )
+      |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute database (
+        statement
+          "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
+          [sqlite.intValue 3, sqlite.textValue "Persist this list in SQLite", sqlite.boolValue False]
+      )
+      |> effects.mapError databaseFailure
     sqliteContext database
   }
 
@@ -137,7 +142,8 @@ effect fn listTodos database: sqlite.Database -> Array<Todo>
 with sqlite: sqlite.Sqlite
 fails String =
   do {
-    result <- sqlite.query database (todosStatement ()) (todoDecoder ())
+    result <-
+      sqlite.query database (todosStatement ()) (todoDecoder ())
       |> effects.mapError databaseFailure
     sqliteContext result.rows
   }
@@ -146,12 +152,13 @@ effect fn insertTodo command: CreateCommand -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
 fails String =
   do {
-    _ <- sqlite.execute command.context.database (
-      statement
-        "insert into todos (title, completed) values (?, ?)"
-        [sqlite.textValue command.title, sqlite.boolValue False]
-    )
-    |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute command.context.database (
+        statement
+          "insert into todos (title, completed) values (?, ?)"
+          [sqlite.textValue command.title, sqlite.boolValue False]
+      )
+      |> effects.mapError databaseFailure
     todos <- listTodos command.context.database
     sqliteContext (todosResponse todos)
   }
@@ -172,12 +179,13 @@ effect fn toggleById command: TodoIdCommand -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
 fails String =
   do {
-    _ <- sqlite.execute command.context.database (
-      statement
-        "update todos set completed = case completed when 0 then 1 else 0 end where id = ?"
-        [sqlite.intValue command.id]
-    )
-    |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute command.context.database (
+        statement
+          "update todos set completed = case completed when 0 then 1 else 0 end where id = ?"
+          [sqlite.intValue command.id]
+      )
+      |> effects.mapError databaseFailure
     todos <- listTodos command.context.database
     sqliteContext (todosResponse todos)
   }
@@ -194,10 +202,11 @@ effect fn deleteById command: TodoIdCommand -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
 fails String =
   do {
-    _ <- sqlite.execute command.context.database (
-      statement "delete from todos where id = ?" [sqlite.intValue command.id]
-    )
-    |> effects.mapError databaseFailure
+    _ <-
+      sqlite.execute command.context.database (
+        statement "delete from todos where id = ?" [sqlite.intValue command.id]
+      )
+      |> effects.mapError databaseFailure
     todos <- listTodos command.context.database
     sqliteContext (todosResponse todos)
   }
@@ -258,12 +267,13 @@ let handler =
 pub effect fn run =
   do {
     database <- openDatabase ()
-    _ <- http.listen {
-      hostname: "0.0.0.0",
-      port: 3001,
-      handler: handler database
-    }
-    |> effects.mapError serverFailure
+    _ <-
+      http.listen {
+        hostname: "0.0.0.0",
+        port: 3001,
+        handler: handler database
+      }
+      |> effects.mapError serverFailure
     keepAlive <- deferred.make<Never, Unit> () |> effects.mapError neverFailure
     deferred.await keepAlive |> effects.mapError neverFailure
   }
