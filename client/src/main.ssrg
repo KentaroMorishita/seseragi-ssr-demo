@@ -1,6 +1,7 @@
 import * as dom from "std/web/dom"
 import * as html from "std/web/html"
 import * as signals from "std/signal"
+import { DomOptions } from "std/web/dom"
 import { MutableSignal } from "std/signal"
 
 type Action =
@@ -110,8 +111,9 @@ fn handle state: MutableSignal<Int> -> action: Action -> Task<Unit> =
     Reset -> signals.set 0 state
   }
 
-let hydrationOptions: dom.DomOptions = dom.DomOptions {
-  eventCapacity: 1024,
+let defaultDomOptions = dom.defaultOptions ()
+let hydrationOptions: DomOptions = DomOptions {
+  ...defaultDomOptions,
   hydration: dom.HydrateStrict,
   cleanup: dom.PreserveRenderedDom
 }
