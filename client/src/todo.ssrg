@@ -7,8 +7,8 @@ import * as queue from "std/queue"
 import * as signals from "std/signal"
 import { DomOptions } from "std/web/dom"
 import { MutableSignal } from "std/signal"
-import { Todo } from "ui"
-import * as styles from "ui/styles"
+import { Todo } from "./model"
+import * as styles from "./styles"
 import * as api from "./api"
 
 type ClientAction =
