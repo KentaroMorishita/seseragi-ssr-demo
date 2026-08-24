@@ -20,9 +20,13 @@ import * as api from "./api"
 
 struct WorkerState {
   origin: String,
-  actions: queue.Queue<Action>,
   todos: MutableSignal<Array<Todo>>,
   draft: MutableSignal<String>,
+}
+
+struct AddCommand {
+  state: WorkerState,
+  title: String,
 }
 
 let defaultDomOptions = dom.defaultOptions ()
@@ -58,9 +62,22 @@ fn dispatch actions: queue.Queue<Action>
 
 fn setDraft value: String
   -> draft: MutableSignal<String>
-  -> Effect<{}, String, Unit> =
+  -> Effect<{ httpClient: http.HttpClient }, String, Unit> =
   signals.set value draft
   |> effects.mapError neverFailure
+
+fn httpSuccess<A> value: A
+  -> Effect<{ httpClient: http.HttpClient }, String, A> =
+  effects.succeed value
+
+effect fn insertTodo command: AddCommand -> Unit
+with httpClient: http.HttpClient
+fails String =
+  do {
+    next <- api.create command.state.origin command.title
+    _ <- signals.set next command.state.todos
+    signals.set "" command.state.draft
+  }
 
 effect fn applyAdd state: WorkerState -> Unit
 with httpClient: http.HttpClient
@@ -68,13 +85,9 @@ fails String =
   do {
     title <- signals.read state.draft
     if title == "" then
-      effects.succeed ()
+      httpSuccess ()
     else
-      do {
-        next <- api.create state.origin title
-        _ <- signals.set next state.todos
-        signals.set "" state.draft
-      }
+      insertTodo (AddCommand { state: state, title: title })
   }
 
 effect fn applyToggle state: WorkerState -> id: Int -> Unit
@@ -93,18 +106,18 @@ fails String =
     signals.set next state.todos
   }
 
-pub effect fn worker state: WorkerState -> Unit
+pub effect fn worker actions: queue.Queue<Action> -> state: WorkerState -> Unit
 with httpClient: http.HttpClient
 fails String =
   do {
-    action <- queue.take state.actions |> effects.mapError queueFailure
+    action <- queue.take actions |> effects.mapError queueFailure
     _ <- match action {
       DraftChanged value -> setDraft value state.draft
       AddTodo -> applyAdd state
       ToggleTodo id -> applyToggle state id
       DeleteTodo id -> applyDelete state id
     }
-    worker state
+    worker actions state
   }
 
 pub effect fn run -> Unit
@@ -126,7 +139,6 @@ fails String =
     let reactive = dom.content (todoView initial "") bindings
     let state = WorkerState {
       origin: origin,
-      actions: actions,
       todos: todos,
       draft: draft,
     }
@@ -134,7 +146,7 @@ fails String =
     target <- dom.query "#todo-app"
       |> effects.mapError domQueryFailure
 
-    _ <- effects.fork (worker state)
+    _ <- effects.fork (worker actions state)
 
     dom.runContent hydrationOptions target (dispatch actions) reactive
       |> effects.mapError domFailure
