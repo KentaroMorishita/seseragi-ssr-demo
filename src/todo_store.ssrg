@@ -31,7 +31,9 @@ fn todoDecoder -> sqlite.Decoder<Todo> =
     (sqlite.map2 todoStart (sqlite.int "id") (sqlite.string "title"))
     (sqlite.bool "completed")
 
-pub fn openDatabase =
+pub effect fn openDatabase -> sqlite.Database
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
   do {
     database <- sqlite.openFile (FileConfig {
       filename: "/tmp/seseragi-ssr-demo.sqlite",
@@ -62,13 +64,17 @@ pub fn openDatabase =
     sqlite.succeed database
   }
 
-pub fn list database: sqlite.Database =
+pub effect fn list database: sqlite.Database -> Array<Todo>
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
   do {
     result <- sqlite.query database (todosStatement ()) (todoDecoder ())
     sqlite.succeed result.rows
   }
 
-pub fn create command: CreateTodo =
+pub effect fn create command: CreateTodo -> Array<Todo>
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
   do {
     _ <- sqlite.execute command.database (
       statement
@@ -79,7 +85,9 @@ pub fn create command: CreateTodo =
     sqlite.succeed result.rows
   }
 
-pub fn toggle command: TodoById =
+pub effect fn toggle command: TodoById -> Array<Todo>
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
   do {
     _ <- sqlite.execute command.database (
       statement
@@ -90,7 +98,9 @@ pub fn toggle command: TodoById =
     sqlite.succeed result.rows
   }
 
-pub fn delete command: TodoById =
+pub effect fn delete command: TodoById -> Array<Todo>
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
   do {
     _ <- sqlite.execute command.database (
       statement "delete from todos where id = ?" [sqlite.intValue command.id]
