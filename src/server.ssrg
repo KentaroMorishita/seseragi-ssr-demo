@@ -7,6 +7,7 @@ import * as sqlite from "sqlite"
 import * as text from "std/text"
 import { Todo } from "ui"
 import { render } from "./document"
+import { CreateTodo, TodoById } from "./todo_store"
 import * as store from "./todo_store"
 
 fn serverFailure error: http.HttpServerError -> String =
@@ -19,9 +20,7 @@ fn jsonTodo todo: Todo -> { id: Int, title: String, completed: Bool } =
   { id: todo.id, title: todo.title, completed: todo.completed }
 
 fn todosResponse todos: Array<Todo> -> http.HttpServerResponse =
-  http.textResponse 200
-    [http.header "content-type" "application/json; charset=utf-8"]
-    (json.encodeString (map jsonTodo todos))
+  http.jsonResponse 200 [] (json.encodeString (map jsonTodo todos))
 
 fn badRequest message: String -> http.HttpServerResponse =
   http.textResponse 400
@@ -43,21 +42,50 @@ fails sqlite.Error =
       if title == "" then
         effects.succeed (badRequest "title is required")
       else
-        store.create database title |> map todosResponse
+        do {
+          todos <- store.create (CreateTodo { database: database, title: title })
+          effects.succeed (todosResponse todos)
+        }
   }
 
-effect fn mutateTodo operation: (sqlite.Database -> Int -> Effect<{ sqlite: sqlite.Sqlite }, sqlite.Error, Array<Todo>>)
-  -> database: sqlite.Database
-  -> request: http.HttpServerRequest
+effect fn parseTodoId request: http.HttpServerRequest -> Int
+fails Never =
+  match text.decodeUtf8 (http.requestBody request) {
+    Left _ -> effects.succeed (-1)
+    Right idText ->
+      match ints.parse idText {
+        Left _ -> effects.succeed (-1)
+        Right id -> effects.succeed id
+      }
+  }
+
+effect fn toggleTodo database: sqlite.Database -> request: http.HttpServerRequest
   -> http.HttpServerResponse
 with sqlite: sqlite.Sqlite
 fails sqlite.Error =
-  match text.decodeUtf8 (http.requestBody request) {
-    Left _ -> effects.succeed (badRequest "request body must be UTF-8")
-    Right idText ->
-      match ints.parse idText {
-        Left _ -> effects.succeed (badRequest "todo id must be an integer")
-        Right id -> operation database id |> map todosResponse
+  do {
+    id <- parseTodoId request
+    if id < 0 then
+      effects.succeed (badRequest "todo id must be an integer")
+    else
+      do {
+        todos <- store.toggle (TodoById { database: database, id: id })
+        effects.succeed (todosResponse todos)
+      }
+  }
+
+effect fn deleteTodo database: sqlite.Database -> request: http.HttpServerRequest
+  -> http.HttpServerResponse
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
+  do {
+    id <- parseTodoId request
+    if id < 0 then
+      effects.succeed (badRequest "todo id must be an integer")
+    else
+      do {
+        todos <- store.delete (TodoById { database: database, id: id })
+        effects.succeed (todosResponse todos)
       }
   }
 
@@ -71,13 +99,16 @@ fails sqlite.Error = {
   if path == "/health" then
     effects.succeed (http.textResponse 200 [] "ok")
   else if method == "GET" && path == "/api/todos" then
-    store.list database |> map todosResponse
+    do {
+      todos <- store.list database
+      effects.succeed (todosResponse todos)
+    }
   else if method == "POST" && path == "/api/todos" then
     createTodo database request
   else if method == "POST" && path == "/api/todos/toggle" then
-    mutateTodo store.toggle database request
+    toggleTodo database request
   else if method == "POST" && path == "/api/todos/delete" then
-    mutateTodo store.delete database request
+    deleteTodo database request
   else if method == "GET" then
     do {
       todos <- store.list database
