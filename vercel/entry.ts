@@ -3,8 +3,6 @@ import clientSource from "__SESERAGI_CLIENT_MODULE__" with { type: "text" }
 
 const clientTag = '<script type="module" src="/client.js"></script>'
 
-fn:
-
 Bun.serve({
   fetch(request) {
     const url = new URL(request.url)
