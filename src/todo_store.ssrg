@@ -1,0 +1,95 @@
+import * as sqlite from "sqlite"
+import { FileConfig, Statement } from "sqlite"
+import { Todo } from "ui"
+
+fn statement sql: String -> values: Array<sqlite.Value> -> Statement =
+  Statement { sql: sql, values: values }
+
+fn todoStart id: Int -> title: String -> (Bool -> Todo) =
+  \completed -> Todo { id: id, title: title, completed: completed }
+
+fn finishTodo build: (Bool -> Todo) -> completed: Bool -> Todo =
+  build completed
+
+fn todoDecoder -> sqlite.Decoder<Todo> =
+  sqlite.map2 finishTodo
+    (sqlite.map2 todoStart (sqlite.int "id") (sqlite.string "title"))
+    (sqlite.bool "completed")
+
+fn seed database: sqlite.Database -> id: Int -> title: String -> completed: Bool
+  -> Unit
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
+  sqlite.execute database (
+    statement
+      "insert or ignore into todos (id, title, completed) values (?, ?, ?)"
+      [sqlite.intValue id, sqlite.textValue title, sqlite.boolValue completed]
+  )
+  |> map (\_ -> ())
+
+pub effect fn open -> sqlite.Database
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
+  do {
+    database <- sqlite.openFile (FileConfig {
+      filename: "/tmp/seseragi-ssr-demo.sqlite",
+      readOnly: False,
+      create: True,
+      busyTimeoutMillis: 1000,
+    })
+    _ <- sqlite.execute database (
+      statement
+        "create table if not exists todos (id integer primary key autoincrement, title text not null, completed integer not null default 0)"
+        (sqlite.emptyValues ())
+    )
+    _ <- seed database 1 "Ship server-rendered HTML" True
+    _ <- seed database 2 "Hydrate the Todo UI" True
+    _ <- seed database 3 "Persist this list in SQLite" False
+    database
+  }
+
+pub effect fn list database: sqlite.Database -> Array<Todo>
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
+  do {
+    result <- sqlite.query database (
+      statement
+        "select id, title, completed from todos order by id desc"
+        (sqlite.emptyValues ())
+    ) (todoDecoder ())
+    result.rows
+  }
+
+pub effect fn create database: sqlite.Database -> title: String -> Array<Todo>
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
+  do {
+    _ <- sqlite.execute database (
+      statement
+        "insert into todos (title, completed) values (?, ?)"
+        [sqlite.textValue title, sqlite.boolValue False]
+    )
+    list database
+  }
+
+pub effect fn toggle database: sqlite.Database -> id: Int -> Array<Todo>
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
+  do {
+    _ <- sqlite.execute database (
+      statement
+        "update todos set completed = case completed when 0 then 1 else 0 end where id = ?"
+        [sqlite.intValue id]
+    )
+    list database
+  }
+
+pub effect fn delete database: sqlite.Database -> id: Int -> Array<Todo>
+with sqlite: sqlite.Sqlite
+fails sqlite.Error =
+  do {
+    _ <- sqlite.execute database (
+      statement "delete from todos where id = ?" [sqlite.intValue id]
+    )
+    list database
+  }
