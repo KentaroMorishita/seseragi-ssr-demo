@@ -4,7 +4,10 @@ import * as json from "std/json"
 import * as text from "std/text"
 import { Todo } from "ui"
 
-fn errorText error -> String = show error
+fn httpBuildFailure error: http.HttpBuildError -> String = show error
+fn httpFailure error: http.HttpError -> String = show error
+fn jsonFailure error: json.JsonReadError -> String = show error
+fn textFailure error: text.Utf8DecodeError -> String = show error
 
 fn toTodo value: { id: Int, title: String, completed: Bool } -> Todo =
   Todo {
@@ -17,14 +20,14 @@ effect fn url origin: String -> path: String -> http.HttpUrl
 fails String =
   http.parseUrl (`${origin}${path}`)
   |> effects.fromEither
-  |> effects.mapError errorText
+  |> effects.mapError httpBuildFailure
 
 effect fn decodeTodos body: String -> Array<Todo>
 fails String =
   do {
     values <- json.decodeString body
       |> effects.fromEither
-      |> effects.mapError errorText
+      |> effects.mapError jsonFailure
     effects.succeed (map toTodo values)
   }
 
@@ -34,7 +37,7 @@ fails String =
     body <- http.responseBody response
       |> text.decodeUtf8
       |> effects.fromEither
-      |> effects.mapError errorText
+      |> effects.mapError textFailure
     decodeTodos body
   }
 
@@ -45,9 +48,9 @@ fails String =
     endpoint <- url origin "/api/todos"
     request <- http.request http.get endpoint
       |> effects.fromEither
-      |> effects.mapError errorText
+      |> effects.mapError httpBuildFailure
     response <- http.sendEmpty (http.defaultBodyLimit ()) request
-      |> effects.mapError errorText
+      |> effects.mapError httpFailure
     responseTodos response
   }
 
@@ -59,9 +62,9 @@ fails String =
     request <- http.request http.post endpoint
       |> http.withRequestHeader "content-type" "text/plain; charset=utf-8"
       |> effects.fromEither
-      |> effects.mapError errorText
+      |> effects.mapError httpBuildFailure
     response <- http.sendBytes (http.defaultBodyLimit ()) (text.encodeUtf8 body) request
-      |> effects.mapError errorText
+      |> effects.mapError httpFailure
     responseTodos response
   }
 
