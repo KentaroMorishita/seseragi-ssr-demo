@@ -9,6 +9,9 @@ on:
 jobs:
   ssr:
     runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TEAM: kentaromorishitas-projects
 
     steps:
       - uses: actions/checkout@v4
@@ -18,15 +21,19 @@ jobs:
       - name: Install Seseragi CLI
         run: cargo install --git https://github.com/KentaroMorishita/seseragi --locked seseragi-cli
 
-      - name: Build
-        run: seseragi build .
+      - name: Build Seseragi process artifact
+        run: |
+          rm -rf generated
+          seseragi build . --out-dir generated
+          test -f generated/entry.ts
+          test -f generated/.seseragi-build.json
 
-      - name: SSR smoke test
+      - name: Prove generated artifact runs on Bun
         shell: bash
         run: |
           set -euo pipefail
 
-          timeout 60s seseragi run . >/tmp/seseragi-ssr-demo.log 2>&1 &
+          timeout 60s bun generated/entry.ts >/tmp/seseragi-ssr-demo.log 2>&1 &
           server_pid=$!
           ok=0
 
@@ -49,3 +56,37 @@ jobs:
           grep -q 'Rendered on the server' /tmp/page.html
           grep -q 'Seseragi SSR' /tmp/page.html
           grep -q '/hello-ssr' /tmp/page.html
+
+      - name: Bundle Vercel Bun function
+        run: |
+          bun build api/index.ts \
+            --target=bun \
+            --outfile=/tmp/seseragi-ssr-vercel.js
+
+          rm -f api/index.ts
+          rm -rf generated
+          cp /tmp/seseragi-ssr-vercel.js api/index.js
+
+          test -f api/index.js
+          grep -q 'Bun' api/index.js
+
+      - name: Deploy to Vercel
+        if: github.event_name != 'pull_request' && env.VERCEL_TOKEN != ''
+        run: |
+          bunx vercel@latest project inspect seseragi-ssr-demo \
+            --scope "$VERCEL_TEAM" \
+            --token "$VERCEL_TOKEN" >/dev/null 2>&1 \
+            || bunx vercel@latest project add seseragi-ssr-demo \
+              --scope "$VERCEL_TEAM" \
+              --token "$VERCEL_TOKEN"
+
+          bunx vercel@latest deploy . \
+            --prod \
+            --yes \
+            --project seseragi-ssr-demo \
+            --scope "$VERCEL_TEAM" \
+            --token "$VERCEL_TOKEN"
+
+      - name: Vercel deployment is not configured
+        if: github.event_name != 'pull_request' && env.VERCEL_TOKEN == ''
+        run: echo "Set the VERCEL_TOKEN repository secret to enable production deployment."
