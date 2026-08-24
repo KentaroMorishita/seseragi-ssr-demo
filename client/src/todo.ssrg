@@ -1,12 +1,14 @@
 import * as dom from "std/web/dom"
 import * as effects from "std/effect"
+import * as html from "std/web/html"
 import * as http from "std/http"
 import * as navigation from "std/web/navigation"
 import * as queue from "std/queue"
 import * as signals from "std/signal"
 import { DomOptions } from "std/web/dom"
 import { MutableSignal } from "std/signal"
-import { Todo, TodoActions, listWith, viewWith } from "ui"
+import { Todo } from "ui"
+import * as styles from "ui/styles"
 import * as api from "./api"
 
 type Action =
@@ -42,25 +44,111 @@ fn domFailure error: dom.DomRuntimeError<String> -> String =
 fn navigationFailure error: navigation.NavigationError -> String =
   navigation.errorMessage error
 
-fn httpClientRequirement -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
-  effects.service (\environment -> environment.httpClient)
+fn statusText todo: Todo -> String =
+  if todo.completed then "Done" else "Open"
 
-fn uiActions -> TodoActions<Action> =
-  TodoActions {
-    draftChanged: DraftChanged,
-    addTodo: AddTodo,
-    toggleTodo: ToggleTodo,
-    deleteTodo: DeleteTodo,
+fn todoTitleStyle todo: Todo -> html.Style =
+  if todo.completed then styles.completedTitleStyle () else styles.todoTitleStyle ()
+
+fn todoItem todo: Todo -> html.Html<Action> =
+  html.li {
+    style: styles.todoItemStyle (),
+    children: [
+      html.button {
+        buttonType: "button",
+        style: styles.toggleButtonStyle todo.completed,
+        onClick: ToggleTodo todo.id,
+        children: statusText todo
+      },
+      html.p {
+        style: todoTitleStyle todo,
+        children: todo.title
+      },
+      html.button {
+        buttonType: "button",
+        style: styles.deleteButtonStyle (),
+        onClick: DeleteTodo todo.id,
+        children: "Delete"
+      }
+    ]
+  }
+
+fn todoList todos: Array<Todo> -> html.Html<Action> =
+  html.ul {
+    id: "todo-list",
+    style: styles.todoListStyle (),
+    children: map todoItem todos
+  }
+
+fn todoView todos: Array<Todo> -> draft: String -> html.Html<Action> =
+  html.section {
+    id: "todo-app",
+    style: styles.todoCardStyle (),
+    children: [
+      html.div {
+        style: styles.todoHeaderStyle (),
+        children: [
+          html.div {
+            children: [
+              html.p {
+                style: styles.labelStyle (),
+                children: "SQLite-backed interaction"
+              },
+              html.h2 {
+                style: styles.todoHeadingStyle (),
+                children: "Things to do"
+              }
+            ]
+          },
+          html.span {
+            style: styles.databaseBadgeStyle (),
+            children: "SQLite"
+          }
+        ]
+      },
+      html.p {
+        style: styles.descriptionStyle (),
+        children: "The initial list is read from SQLite during SSR. After hydration, mutations go through the Seseragi HTTP server and the list region updates reactively."
+      },
+      html.div {
+        style: styles.composerStyle (),
+        children: [
+          html.input {
+            id: "todo-input",
+            inputType: "text",
+            value: draft,
+            placeholder: "Add a task",
+            autoComplete: "off",
+            style: styles.inputStyle (),
+            onInput: \event -> DraftChanged event.value
+          },
+          html.button {
+            buttonType: "button",
+            style: styles.addButtonStyle (),
+            onClick: AddTodo,
+            children: "Add"
+          }
+        ]
+      },
+      todoList todos,
+      html.p {
+        style: styles.noteStyle (),
+        children: "Ephemeral container SQLite · data may reset when the deployment or instance restarts."
+      }
+    ]
   }
 
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
-  dom.content (listWith (uiActions ()) todos) []
+  dom.content (todoList todos) []
 
 fn dispatch actions: queue.Queue<Action>
   -> action: Action
   -> Effect<{}, String, Unit> =
   queue.offer action actions
   |> effects.mapError queueFailure
+
+fn httpClientRequirement -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
+  effects.service (\environment -> environment.httpClient)
 
 effect fn httpSuccess<A> value: A =
   do {
@@ -158,7 +246,7 @@ fails String =
       dom.bindValue "#todo-input" draft,
       dom.bindRegion "#todo-list" listRegion
     ]
-    let reactive = dom.content (viewWith (uiActions ()) initial "") bindings
+    let reactive = dom.content (todoView initial "") bindings
 
     target <- dom.query "#todo-app"
       |> effects.mapError domQueryFailure
