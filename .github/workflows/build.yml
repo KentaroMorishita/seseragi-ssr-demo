@@ -109,22 +109,32 @@ jobs:
           grep -q '/vercel-bun' /tmp/vercel-page.html
 
       - name: Deploy to Vercel
-        if: github.event_name != 'pull_request' && env.VERCEL_TOKEN != ''
+        if: env.VERCEL_TOKEN != ''
+        shell: bash
         run: |
+          set -euo pipefail
+
           bunx vercel@latest project inspect seseragi-ssr-demo \
             --scope "$VERCEL_TEAM" \
-            --token "$VERCEL_TOKEN" >/dev/null 2>&1 \
+            --token "$VERCEL_TOKEN" \
             || bunx vercel@latest project add seseragi-ssr-demo \
               --scope "$VERCEL_TEAM" \
               --token "$VERCEL_TOKEN"
 
-          bunx vercel@latest deploy . \
-            --prod \
-            --yes \
-            --project seseragi-ssr-demo \
-            --scope "$VERCEL_TEAM" \
+          deploy_args=(
+            deploy .
+            --yes
+            --project seseragi-ssr-demo
+            --scope "$VERCEL_TEAM"
             --token "$VERCEL_TOKEN"
+          )
+
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            deploy_args+=(--prod)
+          fi
+
+          bunx vercel@latest "${deploy_args[@]}"
 
       - name: Vercel deployment is not configured
-        if: github.event_name != 'pull_request' && env.VERCEL_TOKEN == ''
-        run: echo "Set the VERCEL_TOKEN repository secret to enable production deployment."
+        if: env.VERCEL_TOKEN == ''
+        run: echo "Set the VERCEL_TOKEN repository secret to enable deployment."
