@@ -2,12 +2,12 @@ import * as effects from "std/effect"
 import * as http from "std/http"
 import * as json from "std/json"
 import * as text from "std/text"
-import { Todo } from "ui"
+import { Todo } from "./model"
 
-fn httpBuildFailure error: http.HttpBuildError -> String = "Invalid Todo HTTP request"
-fn httpFailure error: http.HttpError -> String = "Todo HTTP request failed"
-fn jsonFailure error: json.JsonReadError -> String = "Todo response JSON was invalid"
-fn textFailure error: text.Utf8DecodeError -> String = "Todo response was not UTF-8"
+fn httpBuildFailure _error: http.HttpBuildError -> String = "Invalid Todo HTTP request"
+fn httpFailure _error: http.HttpError -> String = "Todo HTTP request failed"
+fn jsonFailure _error: json.JsonReadError -> String = "Todo response JSON was invalid"
+fn textFailure _error: text.Utf8DecodeError -> String = "Todo response was not UTF-8"
 
 fn toTodo value: { id: Int, title: String, completed: Bool } -> Todo =
   Todo {
