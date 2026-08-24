@@ -16,8 +16,9 @@ let hydrationOptions: DomOptions = DomOptions {
   cleanup: dom.PreserveRenderedDom
 }
 
-fn queueFailure _ -> String = "Todo action queue closed"
-fn domFailure error -> String = show error
+fn queueFailure error: queue.QueueClosed -> String = "Todo action queue closed"
+fn domQueryFailure error: dom.DomError -> String = show error
+fn domFailure error: dom.DomRuntimeError<String> -> String = show error
 fn navigationFailure error: navigation.NavigationError -> String =
   navigation.errorMessage error
 
@@ -78,7 +79,7 @@ fails String =
     initial <- api.list origin
     todos <- signals.make initial
     draft <- signals.make ""
-    actions <- queue.unbounded ()
+    actions <- queue.unbounded<Action> ()
 
     let listRegion = signals.map region todos
     let bindings: Array<dom.DomBinding<Action>> = [
@@ -88,9 +89,10 @@ fails String =
     let reactive = dom.content (todoView initial "") bindings
 
     target <- dom.query "#todo-app"
-      |> effects.mapError (\error: dom.DomError -> show error)
-    _ <- dom.runContent hydrationOptions target (dispatch draft actions) reactive
-      |> effects.mapError domFailure
+      |> effects.mapError domQueryFailure
 
-    worker origin actions todos draft
+    _ <- effects.fork (worker origin actions todos draft)
+
+    dom.runContent hydrationOptions target (dispatch draft actions) reactive
+      |> effects.mapError domFailure
   }
