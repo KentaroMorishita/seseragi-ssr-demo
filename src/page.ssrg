@@ -8,34 +8,46 @@ type ServerAction =
 fn ignoreDraft _value: String -> ServerAction = Noop
 fn ignoreTodo _id: Int -> ServerAction = Noop
 
+fn badges -> html.Html<ServerAction> =
+  html.div {
+    style: styles.badgeRowStyle (),
+    children: [
+      html.span {
+        style: styles.badgeStyle (),
+        children: "SSR + Hydration"
+      },
+      html.span {
+        style: styles.sqliteBadgeStyle (),
+        children: "SQLite on Bun"
+      }
+    ]
+  }
+
+fn title -> html.Html<ServerAction> =
+  html.h1 {
+    style: styles.titleStyle (),
+    children: "Seseragi Todo"
+  }
+
+fn lead -> html.Html<ServerAction> =
+  html.p {
+    style: styles.leadStyle (),
+    children: "The server reads SQLite before rendering this page. The browser hydrates only the interactive Todo island and sends mutations back through Seseragi HTTP."
+  }
+
+fn content todos: Array<Todo> -> html.Html<ServerAction> =
+  html.main {
+    style: styles.shellStyle (),
+    children: [
+      badges (),
+      title (),
+      lead (),
+      todoView ignoreDraft Noop ignoreTodo ignoreTodo todos ""
+    ]
+  }
+
 pub fn body _path: String -> todos: Array<Todo> -> html.Html<ServerAction> =
   html.body {
     style: styles.pageStyle (),
-    children: html.main {
-      style: styles.shellStyle (),
-      children: [
-        html.div {
-          style: styles.badgeRowStyle (),
-          children: [
-            html.span {
-              style: styles.badgeStyle (),
-              children: "SSR + Hydration"
-            },
-            html.span {
-              style: styles.sqliteBadgeStyle (),
-              children: "SQLite on Bun"
-            }
-          ]
-        },
-        html.h1 {
-          style: styles.titleStyle (),
-          children: "Seseragi Todo"
-        },
-        html.p {
-          style: styles.leadStyle (),
-          children: "The server reads SQLite before rendering this page. The browser hydrates only the interactive Todo island and sends mutations back through Seseragi HTTP."
-        },
-        todoView ignoreDraft Noop ignoreTodo ignoreTodo todos ""
-      ]
-    }
+    children: content todos
   }
