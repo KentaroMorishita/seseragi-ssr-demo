@@ -5,21 +5,25 @@ import * as navigation from "std/web/navigation"
 import * as signals from "std/signal"
 import { DomOptions } from "std/web/dom"
 import { MutableSignal } from "std/signal"
-import {
-  Action,
-  AddTodo,
-  DeleteTodo,
-  DraftChanged,
-  Todo,
-  ToggleTodo,
-  islandContent,
-  listContent,
-} from "ui"
+import { Todo, TodoActions, islandContent, listContent } from "ui"
 import * as api from "./api"
+
+type Action =
+  | DraftChanged String
+  | AddTodo
+  | ToggleTodo Int
+  | DeleteTodo Int
 
 struct DraftCommand {
   value: String,
   draft: MutableSignal<String>,
+}
+
+let actions = TodoActions<Action> {
+  draftChanged: DraftChanged,
+  addTodo: AddTodo,
+  toggleTodo: ToggleTodo,
+  deleteTodo: DeleteTodo,
 }
 
 let defaultDomOptions = dom.defaultOptions ()
@@ -42,7 +46,7 @@ fn navigationFailure error: navigation.NavigationError -> String =
   navigation.errorMessage error
 
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
-  dom.content (listContent todos) []
+  dom.content (listContent actions todos) []
 
 fn httpClientService
   -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
@@ -56,13 +60,6 @@ fn httpContext<A> value: A
   httpClientService ()
   |> map (keepHttp value)
   |> effects.mapError neverFailure
-
-fn provideHttp<A> client: http.HttpClient
-  -> effect: Effect<{ httpClient: http.HttpClient }, String, A>
-  -> Effect<{}, String, A> =
-  effects.provideSome
-    (\_environment: {} -> { httpClient: client })
-    effect
 
 effect fn setDraft command: DraftCommand -> Unit
 with httpClient: http.HttpClient
@@ -128,13 +125,14 @@ fn dispatchAction client: http.HttpClient
   -> draft: MutableSignal<String>
   -> action: Action
   -> Effect<{}, String, Unit> =
-  match action {
-    DraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
-    AddTodo -> applyAdd origin todos draft
-    ToggleTodo id -> applyToggle origin todos id
-    DeleteTodo id -> applyDelete origin todos id
-  }
-  |> provideHttp client
+  effects.provideSome
+    (\_environment: {} -> { httpClient: client })
+    (match action {
+      DraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
+      AddTodo -> applyAdd origin todos draft
+      ToggleTodo id -> applyToggle origin todos id
+      DeleteTodo id -> applyDelete origin todos id
+    })
 
 pub effect fn run -> Unit
 with dom: dom.Dom, httpClient: http.HttpClient, navigation: navigation.Navigation
@@ -152,7 +150,7 @@ fails String =
       dom.bindValue "#todo-input" draft,
       dom.bindRegion "#todo-list" listRegion
     ]
-    let reactive = dom.content (islandContent initial "") bindings
+    let reactive = dom.content (islandContent actions initial "") bindings
 
     target <- dom.query "#todo-interactive"
       |> effects.mapError domQueryFailure
