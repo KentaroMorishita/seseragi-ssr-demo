@@ -1,0 +1,86 @@
+import * as effects from "std/effect"
+import * as http from "std/http"
+import * as json from "std/json"
+import * as text from "std/text"
+import { Todo } from "./model"
+
+fn httpBuildFailure _error: http.HttpBuildError -> String = "Invalid Todo HTTP request"
+fn httpFailure _error: http.HttpError -> String = "Todo HTTP request failed"
+fn jsonFailure _error: json.JsonReadError -> String = "Todo response JSON was invalid"
+fn textFailure _error: text.Utf8DecodeError -> String = "Todo response was not UTF-8"
+
+fn toTodo value: { id: Int, title: String, completed: Bool } -> Todo =
+  Todo {
+    id: value.id,
+    title: value.title,
+    completed: value.completed,
+  }
+
+fn decodeTodoJson body: String
+  -> Either<json.JsonReadError, Array<{ id: Int, title: String, completed: Bool }>> =
+  json.decodeString body
+
+effect fn url origin: String -> path: String -> http.HttpUrl
+fails String =
+  http.parseUrl (`${origin}${path}`)
+  |> effects.fromEither
+  |> effects.mapError httpBuildFailure
+
+effect fn decodeTodos body: String -> Array<Todo>
+fails String =
+  do {
+    values <- decodeTodoJson body
+      |> effects.fromEither
+      |> effects.mapError jsonFailure
+    effects.succeed (map toTodo values)
+  }
+
+effect fn responseTodos response: http.Response -> Array<Todo>
+fails String =
+  do {
+    body <- http.responseBody response
+      |> text.decodeUtf8
+      |> effects.fromEither
+      |> effects.mapError textFailure
+    decodeTodos body
+  }
+
+pub effect fn list origin: String -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  do {
+    endpoint <- url origin "/api/todos"
+    let request = http.request http.get endpoint
+    response <- http.sendEmpty (http.defaultBodyLimit ()) request
+      |> effects.mapError httpFailure
+    responseTodos response
+  }
+
+effect fn post origin: String -> path: String -> body: String -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  do {
+    endpoint <- url origin path
+    request <- http.request http.post endpoint
+      |> http.withRequestHeader "content-type" "text/plain; charset=utf-8"
+      |> effects.fromEither
+      |> effects.mapError httpBuildFailure
+    response <- http.sendBytes (http.defaultBodyLimit ()) (text.encodeUtf8 body) request
+      |> effects.mapError httpFailure
+    responseTodos response
+  }
+
+pub effect fn create origin: String -> title: String -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  post origin "/api/todos" title
+
+pub effect fn toggle origin: String -> id: Int -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  post origin "/api/todos/toggle" (show id)
+
+pub effect fn delete origin: String -> id: Int -> Array<Todo>
+with httpClient: http.HttpClient
+fails String =
+  post origin "/api/todos/delete" (show id)

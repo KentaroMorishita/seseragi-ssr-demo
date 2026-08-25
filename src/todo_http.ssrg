@@ -1,0 +1,106 @@
+import * as http from "std/http/server"
+import * as ints from "std/int"
+import * as json from "std/json"
+import * as sqlite from "sqlite"
+import * as text from "std/text"
+import { Todo } from "ui"
+import { render } from "./document"
+import { CreateTodo, TodoById } from "./todo_store"
+import * as store from "./todo_store"
+
+fn todosResponse todos: Array<Todo> -> http.HttpServerResponse =
+  http.jsonResponse 200 [] (
+    json.encodeString (
+      map
+        (\todo: Todo -> {
+          id: todo.id,
+          title: todo.title,
+          completed: todo.completed,
+        })
+        todos
+    )
+  )
+
+fn badRequest message: String -> http.HttpServerResponse =
+  http.textResponse 400
+    [http.header "content-type" "text/plain; charset=utf-8"]
+    message
+
+pub fn handler database: sqlite.Database
+  -> http.Handler<{ sqlite: sqlite.Sqlite }, Never> =
+  http.recoverHandler
+    (\error: String ->
+      http.textResponse 500
+        [http.header "content-type" "text/plain; charset=utf-8"]
+        error
+    )
+    (\request: http.HttpServerRequest -> {
+      let method = http.requestMethod request
+      let path = http.requestPath request
+
+      if path == "/health" then
+        store.succeed (http.textResponse 200 [] "ok")
+      else if method == "GET" && path == "/api/todos" then
+        do {
+          todos <- store.list database
+          store.succeed (todosResponse todos)
+        }
+      else if method == "POST" && path == "/api/todos" then
+        match text.decodeUtf8 (http.requestBody request) {
+          Left _ -> store.succeed (badRequest "request body must be UTF-8")
+          Right title ->
+            if title == "" then
+              store.succeed (badRequest "title is required")
+            else
+              do {
+                todos <- store.create (CreateTodo {
+                  database: database,
+                  title: title,
+                })
+                store.succeed (todosResponse todos)
+              }
+        }
+      else if method == "POST" && path == "/api/todos/toggle" then
+        match text.decodeUtf8 (http.requestBody request) {
+          Left _ -> store.succeed (badRequest "todo id must be an integer")
+          Right idText ->
+            match ints.parse idText {
+              Left _ -> store.succeed (badRequest "todo id must be an integer")
+              Right id ->
+                do {
+                  todos <- store.toggle (TodoById {
+                    database: database,
+                    id: id,
+                  })
+                  store.succeed (todosResponse todos)
+                }
+            }
+        }
+      else if method == "POST" && path == "/api/todos/delete" then
+        match text.decodeUtf8 (http.requestBody request) {
+          Left _ -> store.succeed (badRequest "todo id must be an integer")
+          Right idText ->
+            match ints.parse idText {
+              Left _ -> store.succeed (badRequest "todo id must be an integer")
+              Right id ->
+                do {
+                  todos <- store.delete (TodoById {
+                    database: database,
+                    id: id,
+                  })
+                  store.succeed (todosResponse todos)
+                }
+            }
+        }
+      else if method == "GET" then
+        do {
+          todos <- store.list database
+          store.succeed (
+            http.textResponse 200
+              [http.header "content-type" "text/html; charset=utf-8"]
+              (render path todos)
+          )
+        }
+      else
+        store.succeed (http.textResponse 405 [] "method not allowed")
+    })

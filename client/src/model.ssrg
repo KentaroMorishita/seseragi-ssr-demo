@@ -1,0 +1,5 @@
+pub struct Todo {
+  id: Int,
+  title: String,
+  completed: Bool,
+}

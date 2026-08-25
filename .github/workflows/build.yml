@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   ssr:
     runs-on: ubuntu-latest
@@ -18,11 +22,37 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - name: Resolve current Seseragi main
+        id: seseragi-main
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git ls-remote https://github.com/KentaroMorishita/seseragi refs/heads/main | cut -f1)"
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Seseragi CLI
+        id: seseragi-cli-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cargo/bin/seseragi
+          key: seseragi-cli-${{ runner.os }}-${{ steps.seseragi-main.outputs.sha }}
+
       - name: Install latest Seseragi CLI
+        if: steps.seseragi-cli-cache.outputs.cache-hit != 'true'
         run: cargo install --git https://github.com/KentaroMorishita/seseragi --locked seseragi-cli
 
-      - name: Refresh lockfile for current Seseragi main
-        run: seseragi lock update
+      - name: Cache Seseragi CLI
+        if: steps.seseragi-cli-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cargo/bin/seseragi
+          key: seseragi-cli-${{ runner.os }}-${{ steps.seseragi-main.outputs.sha }}
+
+      - name: Refresh lockfiles for current Seseragi main
+        run: |
+          seseragi lock update
+          seseragi lock update client
 
       - name: Build Seseragi process artifact
         run: |
@@ -31,17 +61,40 @@ jobs:
           test -f generated/entry.ts
           test -f generated/.seseragi-build.json
 
-      - name: Prove generated artifact runs on Bun
+      - name: Prove SQLite CRUD and SSR on Bun
         shell: bash
         run: |
           set -euo pipefail
+          rm -f /tmp/seseragi-ssr-demo.sqlite
 
-          timeout 60s bun generated/entry.ts >/tmp/seseragi-ssr-demo.log 2>&1 &
+          bun generated/entry.ts >/tmp/seseragi-todo.log 2>&1 &
           server_pid=$!
-          ok=0
 
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "=== Seseragi server log ==="
+              cat /tmp/seseragi-todo.log || true
+            fi
+            kill "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          request() {
+            label="$1"
+            output="$2"
+            shift 2
+            echo "=== $label ==="
+            if ! curl --fail-with-body --show-error --silent "$@" >"$output"; then
+              echo "=== response body ==="
+              cat "$output" || true
+              return 1
+            fi
+          }
+
+          ok=0
           for _ in $(seq 1 60); do
-            if curl --fail --silent --show-error http://127.0.0.1:3000/hello-ssr >/tmp/page.html; then
+            if curl --fail --silent http://127.0.0.1:3001/health >/dev/null; then
               ok=1
               break
             fi
@@ -49,72 +102,123 @@ jobs:
           done
 
           if [ "$ok" -ne 1 ]; then
-            cat /tmp/seseragi-ssr-demo.log
+            cat /tmp/seseragi-todo.log
             exit 1
           fi
 
-          wait "$server_pid"
+          request "SSR before mutations" /tmp/page-before.html \
+            http://127.0.0.1:3001/
+          request "Todo API before mutations" /tmp/todos-before.json \
+            http://127.0.0.1:3001/api/todos
 
-          grep -q '<!doctype html>' /tmp/page.html
-          grep -q 'Rendered on the server' /tmp/page.html
-          grep -q 'Seseragi SSR' /tmp/page.html
-          grep -q '/hello-ssr' /tmp/page.html
-          grep -q 'counter-app' /tmp/page.html
-          grep -q 'Hydrated interaction' /tmp/page.html
-          grep -q '>0<' /tmp/page.html
+          grep -q '<!doctype html>' /tmp/page-before.html
+          grep -q 'Seseragi Todo' /tmp/page-before.html
+          grep -q 'todo-app' /tmp/page-before.html
+          grep -q 'SQLite on Bun' /tmp/page-before.html
+          grep -q 'Persist this list in SQLite' /tmp/page-before.html
+
+          bun -e '
+            const todos = await Bun.file("/tmp/todos-before.json").json();
+            if (!Array.isArray(todos) || todos.length !== 3) process.exit(1);
+            if (!todos.some((todo) => todo.title === "Persist this list in SQLite" && todo.completed === false)) process.exit(1);
+          '
+
+          request "Create Todo" /tmp/todos-created.json \
+            -X POST \
+            -H 'content-type: text/plain; charset=utf-8' \
+            --data-binary 'CI Todo roundtrip' \
+            http://127.0.0.1:3001/api/todos
+
+          bun -e '
+            const todos = await Bun.file("/tmp/todos-created.json").json();
+            if (!todos.some((todo) => todo.title === "CI Todo roundtrip" && todo.completed === false)) process.exit(1);
+          '
+
+          request "SSR after create" /tmp/page-after.html \
+            http://127.0.0.1:3001/
+          grep -q 'CI Todo roundtrip' /tmp/page-after.html
+
+          request "Toggle Todo" /tmp/todos-toggled.json \
+            -X POST \
+            --data-binary '3' \
+            http://127.0.0.1:3001/api/todos/toggle
+
+          bun -e '
+            const todos = await Bun.file("/tmp/todos-toggled.json").json();
+            const todo = todos.find((item) => item.id === 3);
+            if (!todo || todo.completed !== true) process.exit(1);
+          '
+
+          request "Delete Todo" /tmp/todos-deleted.json \
+            -X POST \
+            --data-binary '3' \
+            http://127.0.0.1:3001/api/todos/delete
+
+          bun -e '
+            const todos = await Bun.file("/tmp/todos-deleted.json").json();
+            if (todos.some((todo) => todo.id === 3)) process.exit(1);
+          '
+
+      - name: Comment Todo runtime diagnostic
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '<!-- todo-runtime-diagnostic -->'
+            echo '### Todo runtime diagnostic'
+            echo
+            for file in \
+              /tmp/page-before.html \
+              /tmp/todos-before.json \
+              /tmp/todos-created.json \
+              /tmp/page-after.html \
+              /tmp/todos-toggled.json \
+              /tmp/todos-deleted.json \
+              /tmp/seseragi-todo.log; do
+              if [ -s "$file" ]; then
+                echo "#### $file"
+                echo '```text'
+                head -c 6000 "$file"
+                echo
+                echo '```'
+              fi
+            done
+          } >/tmp/todo-diagnostic.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file /tmp/todo-diagnostic.md
 
       - name: Build Seseragi browser hydration client
         shell: bash
         run: |
           set -euo pipefail
-
           rm -rf client-dist
-          seseragi lock update client
           seseragi build client --out-dir client-dist
-
           test -f client-dist/assets/app.js
           test -f client-dist/.seseragi-build.json
-          grep -q 'counter-app' client-dist/assets/app.js
+          grep -q 'todo-app' client-dist/assets/app.js
+          grep -q 'todo-list' client-dist/assets/app.js
 
-      - name: Bundle Vercel Bun function
+      - name: Build Vercel container image
+        run: docker build -f Dockerfile.vercel -t seseragi-ssr-demo:test .
+
+      - name: Prove container serves Todo, client and SQLite
         shell: bash
         run: |
           set -euo pipefail
 
-          view_module="$(grep -R -l --include='*.ts' 'export const render =' generated | head -n 1)"
-          test -n "$view_module"
+          docker run --rm -d \
+            --name seseragi-ssr-demo-test \
+            -e PORT=8080 \
+            -p 8080:8080 \
+            seseragi-ssr-demo:test
 
-          mkdir -p api
-          sed \
-            -e "s|__SESERAGI_VIEW_MODULE__|../$view_module|" \
-            -e "s|__SESERAGI_CLIENT_MODULE__|../client-dist/assets/app.js|" \
-            vercel/entry.ts > api/index.ts
+          trap 'docker rm -f seseragi-ssr-demo-test >/dev/null 2>&1 || true' EXIT
 
-          bun build api/index.ts \
-            --target=bun \
-            --outfile=/tmp/seseragi-ssr-vercel.js
-
-          rm -f api/index.ts
-          rm -rf generated client-dist
-          cp /tmp/seseragi-ssr-vercel.js api/index.js
-
-          test -f api/index.js
-          grep -q 'Bun' api/index.js
-          grep -q 'counter-app' api/index.js
-
-      - name: Prove Vercel bundle runs on Bun
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          bun api/index.js >/tmp/seseragi-vercel-bundle.log 2>&1 &
-          server_pid=$!
           ok=0
-
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
-
-          for _ in $(seq 1 30); do
-            if curl --fail --silent --show-error http://127.0.0.1:3000/vercel-bun >/tmp/vercel-page.html; then
+          for _ in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8080/health >/dev/null; then
               ok=1
               break
             fi
@@ -122,20 +226,35 @@ jobs:
           done
 
           if [ "$ok" -ne 1 ]; then
-            cat /tmp/seseragi-vercel-bundle.log
+            docker logs seseragi-ssr-demo-test
             exit 1
           fi
 
-          curl --fail --silent --show-error http://127.0.0.1:3000/client.js >/tmp/client.js
+          curl --fail --silent http://127.0.0.1:8080/ >/tmp/container-page.html
+          curl --fail --silent http://127.0.0.1:8080/client.js >/tmp/container-client.js
+          curl --fail --silent http://127.0.0.1:8080/api/todos >/tmp/container-todos.json
 
-          grep -q '<!doctype html>' /tmp/vercel-page.html
-          grep -q 'Rendered on the server' /tmp/vercel-page.html
-          grep -q '/vercel-bun' /tmp/vercel-page.html
-          grep -q 'counter-app' /tmp/vercel-page.html
-          grep -q 'src="/client.js"' /tmp/vercel-page.html
-          grep -q 'counter-app' /tmp/client.js
+          grep -q '<!doctype html>' /tmp/container-page.html
+          grep -q 'Seseragi Todo' /tmp/container-page.html
+          grep -q 'todo-app' /tmp/container-page.html
+          grep -q 'src="/client.js"' /tmp/container-page.html
+          grep -q 'todo-app' /tmp/container-client.js
 
-      - name: Deploy to Vercel
+          bun -e '
+            const todos = await Bun.file("/tmp/container-todos.json").json();
+            if (!Array.isArray(todos) || todos.length !== 3) process.exit(1);
+          '
+
+          curl --fail --silent \
+            -X POST \
+            -H 'content-type: text/plain; charset=utf-8' \
+            --data-binary 'Container SQLite roundtrip' \
+            http://127.0.0.1:8080/api/todos >/tmp/container-created.json
+
+          curl --fail --silent http://127.0.0.1:8080/ >/tmp/container-page-after.html
+          grep -q 'Container SQLite roundtrip' /tmp/container-page-after.html
+
+      - name: Deploy Vercel container
         if: github.event_name != 'pull_request' && env.VERCEL_TOKEN != ''
         run: |
           bunx vercel@latest project inspect seseragi-ssr-demo \
