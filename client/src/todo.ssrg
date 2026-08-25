@@ -142,7 +142,7 @@ fn todoView todos: Array<Todo> -> draft: String -> html.Html<Action> =
   }
 
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
-  dom.content (todoList todos) []
+  dom.content (html.fragment (map todoItem todos)) []
 
 fn dispatch actions: queue.Queue<Action>
   -> action: Action
