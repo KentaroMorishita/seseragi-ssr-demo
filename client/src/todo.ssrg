@@ -1,20 +1,18 @@
 import * as dom from "std/web/dom"
 import * as effects from "std/effect"
-import * as html from "std/web/html"
 import * as http from "std/http"
 import * as navigation from "std/web/navigation"
 import * as signals from "std/signal"
 import { DomOptions } from "std/web/dom"
 import { MutableSignal } from "std/signal"
-import { Todo } from "./model"
-import * as styles from "./styles"
+import { Todo, islandContent, listContent } from "ui"
 import * as api from "./api"
 
 type Action =
-  | ClientDraftChanged String
-  | ClientAddTodo
-  | ClientToggleTodo Int
-  | ClientDeleteTodo Int
+  | DraftChanged String
+  | AddTodo
+  | ToggleTodo Int
+  | DeleteTodo Int
 
 struct DraftCommand {
   value: String,
@@ -40,105 +38,8 @@ fn domFailure error: dom.DomRuntimeError<String> -> String =
 fn navigationFailure error: navigation.NavigationError -> String =
   navigation.errorMessage error
 
-fn statusText todo: Todo -> String =
-  if todo.completed then "Done" else "Open"
-
-fn todoTitleStyle todo: Todo -> html.Style =
-  if todo.completed then styles.completedTitleStyle () else styles.todoTitleStyle ()
-
-fn todoItem todo: Todo -> html.Html<Action> =
-  html.li {
-    style: styles.todoItemStyle (),
-    children: [
-      html.button {
-        buttonType: "button",
-        style: styles.toggleButtonStyle todo.completed,
-        onClick: ClientToggleTodo todo.id,
-        children: statusText todo
-      },
-      html.p {
-        style: todoTitleStyle todo,
-        children: todo.title
-      },
-      html.button {
-        buttonType: "button",
-        style: styles.deleteButtonStyle (),
-        onClick: ClientDeleteTodo todo.id,
-        children: "Delete"
-      }
-    ]
-  }
-
-fn todoList todos: Array<Todo> -> html.Html<Action> =
-  html.ul {
-    id: "todo-list",
-    style: styles.todoListStyle (),
-    children: map todoItem todos
-  }
-
-fn todoChildren todos: Array<Todo> -> draft: String -> Array<html.Html<Action>> =
-  [
-    html.div {
-      style: styles.todoHeaderStyle (),
-      children: [
-        html.div {
-          children: [
-            html.p {
-              style: styles.labelStyle (),
-              children: "SQLite-backed interaction"
-            },
-            html.h2 {
-              style: styles.todoHeadingStyle (),
-              children: "Things to do"
-            }
-          ]
-        },
-        html.span {
-          style: styles.databaseBadgeStyle (),
-          children: "SQLite"
-        }
-      ]
-    },
-    html.p {
-      style: styles.descriptionStyle (),
-      children: "The initial list is read from SQLite during SSR. After hydration, mutations go through the Seseragi HTTP server and the list region updates reactively."
-    },
-    html.form {
-      style: styles.composerStyle (),
-      onSubmit: ClientAddTodo,
-      children: [
-        html.input {
-          id: "todo-input",
-          inputType: "text",
-          value: draft,
-          placeholder: "Add a task",
-          autoComplete: "off",
-          style: styles.inputStyle (),
-          onInput: \event -> ClientDraftChanged event.value
-        },
-        html.button {
-          buttonType: "submit",
-          style: styles.addButtonStyle (),
-          children: "Add"
-        }
-      ]
-    },
-    todoList todos,
-    html.p {
-      style: styles.noteStyle (),
-      children: "Ephemeral container SQLite · data may reset when the deployment or instance restarts."
-    }
-  ]
-
-fn todoView todos: Array<Todo> -> draft: String -> html.Html<Action> =
-  html.section {
-    id: "todo-app",
-    style: styles.todoCardStyle (),
-    children: todoChildren todos draft
-  }
-
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
-  dom.content (html.fragment (map todoItem todos)) []
+  dom.content (listContent ToggleTodo DeleteTodo todos) []
 
 fn httpClientService
   -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
@@ -211,17 +112,20 @@ fails String =
     signals.set next todos |> effects.mapError neverFailure
   }
 
-fn dispatchAction origin: String
+fn dispatchAction client: http.HttpClient
+  -> origin: String
   -> todos: MutableSignal<Array<Todo>>
   -> draft: MutableSignal<String>
   -> action: Action
-  -> Effect<{ httpClient: http.HttpClient }, String, Unit> =
-  match action {
-    ClientDraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
-    ClientAddTodo -> applyAdd origin todos draft
-    ClientToggleTodo id -> applyToggle origin todos id
-    ClientDeleteTodo id -> applyDelete origin todos id
-  }
+  -> Effect<{}, String, Unit> =
+  effects.provideSome
+    (\_environment: {} -> { httpClient: client })
+    (match action {
+      DraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
+      AddTodo -> applyAdd origin todos draft
+      ToggleTodo id -> applyToggle origin todos id
+      DeleteTodo id -> applyDelete origin todos id
+    })
 
 pub effect fn run -> Unit
 with dom: dom.Dom, httpClient: http.HttpClient, navigation: navigation.Navigation
@@ -232,17 +136,18 @@ fails String =
     initial <- api.list origin
     todos <- signals.make initial |> effects.mapError neverFailure
     draft <- signals.make "" |> effects.mapError neverFailure
+    client <- httpClientService () |> effects.mapError neverFailure
 
     let listRegion = signals.map region todos
     let bindings: Array<dom.DomBinding<Action>> = [
       dom.bindValue "#todo-input" draft,
       dom.bindRegion "#todo-list" listRegion
     ]
-    let reactive = dom.content (html.fragment (todoChildren initial "")) bindings
+    let reactive = dom.content (islandContent DraftChanged AddTodo ToggleTodo DeleteTodo initial "") bindings
 
-    target <- dom.query "#todo-app"
+    target <- dom.query "#todo-interactive"
       |> effects.mapError domQueryFailure
 
-    dom.runContent hydrationOptions target (dispatchAction origin todos draft) reactive
+    dom.runContent hydrationOptions target (dispatchAction client origin todos draft) reactive
       |> effects.mapError domFailure
   }

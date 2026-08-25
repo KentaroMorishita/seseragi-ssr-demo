@@ -114,6 +114,8 @@ jobs:
           grep -q '<!doctype html>' /tmp/page-before.html
           grep -q 'Seseragi Todo' /tmp/page-before.html
           grep -q 'todo-app' /tmp/page-before.html
+          grep -q 'todo-interactive' /tmp/page-before.html
+          grep -q '<form' /tmp/page-before.html
           grep -q 'SQLite on Bun' /tmp/page-before.html
           grep -q 'Persist this list in SQLite' /tmp/page-before.html
 
@@ -197,7 +199,7 @@ jobs:
           seseragi build client --out-dir client-dist
           test -f client-dist/assets/app.js
           test -f client-dist/.seseragi-build.json
-          grep -q 'todo-app' client-dist/assets/app.js
+          grep -q 'todo-interactive' client-dist/assets/app.js
           grep -q 'todo-list' client-dist/assets/app.js
 
       - name: Stage generated dependencies for Vercel upload
@@ -218,7 +220,7 @@ jobs:
       - name: Build Vercel container image
         run: docker build -f Dockerfile.vercel -t seseragi-ssr-demo:test .
 
-      - name: Prove container serves Todo, client and SQLite
+      - name: Prove container and Todo island in Chromium
         shell: bash
         run: |
           set -euo pipefail
@@ -252,8 +254,9 @@ jobs:
           grep -q '<!doctype html>' /tmp/container-page.html
           grep -q 'Seseragi Todo' /tmp/container-page.html
           grep -q 'todo-app' /tmp/container-page.html
+          grep -q 'todo-interactive' /tmp/container-page.html
           grep -q 'src="/client.js"' /tmp/container-page.html
-          grep -q 'todo-app' /tmp/container-client.js
+          grep -q 'todo-interactive' /tmp/container-client.js
 
           bun -e '
             const todos = await Bun.file("/tmp/container-todos.json").json();
@@ -268,6 +271,10 @@ jobs:
 
           curl --fail --silent http://127.0.0.1:8080/ >/tmp/container-page-after.html
           grep -q 'Container SQLite roundtrip' /tmp/container-page-after.html
+
+          (cd tests && bun install)
+          (cd tests && bunx playwright install chromium)
+          TODO_BASE_URL=http://127.0.0.1:8080 bun tests/browser-smoke.ts
 
       - name: Deploy Vercel container
         if: github.event_name != 'pull_request' && env.VERCEL_TOKEN != ''

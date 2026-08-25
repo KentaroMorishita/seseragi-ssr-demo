@@ -1,35 +1,62 @@
 import * as html from "std/web/html"
-import { Action, Todo, view as todoView } from "ui"
+import { Todo, view as todoView } from "ui"
 import * as styles from "./styles"
 
-pub fn body _path: String -> todos: Array<Todo> -> html.Html<Action> =
+type ServerAction =
+  | Noop
+
+fn ignoreDraft _value: String -> ServerAction = Noop
+fn ignoreTodo _id: Int -> ServerAction = Noop
+
+fn ssrBadge -> html.Html<ServerAction> =
+  html.span {
+    style: styles.badgeStyle (),
+    children: "SSR + Hydration"
+  }
+
+fn sqliteBadge -> html.Html<ServerAction> =
+  html.span {
+    style: styles.sqliteBadgeStyle (),
+    children: "SQLite on Bun"
+  }
+
+fn badges -> html.Html<ServerAction> =
+  html.div {
+    style: styles.badgeRowStyle (),
+    children: [
+      ssrBadge (),
+      sqliteBadge ()
+    ]
+  }
+
+fn title -> html.Html<ServerAction> =
+  html.h1 {
+    style: styles.titleStyle (),
+    children: "Seseragi Todo"
+  }
+
+fn lead -> html.Html<ServerAction> =
+  html.p {
+    style: styles.leadStyle (),
+    children: "The server reads SQLite before rendering this page. The browser hydrates only the interactive Todo island and sends mutations back through Seseragi HTTP."
+  }
+
+fn content todos: Array<Todo> -> html.Html<ServerAction> =
+  html.main {
+    style: styles.shellStyle (),
+    children: [
+      badges (),
+      title (),
+      lead (),
+      todoView ignoreDraft Noop ignoreTodo ignoreTodo todos ""
+    ]
+  }
+
+fn body _path: String -> todos: Array<Todo> -> html.Html<ServerAction> =
   html.body {
     style: styles.pageStyle (),
-    children: html.main {
-      style: styles.shellStyle (),
-      children: [
-        html.div {
-          style: styles.badgeRowStyle (),
-          children: [
-            html.span {
-              style: styles.badgeStyle (),
-              children: "SSR + Hydration"
-            },
-            html.span {
-              style: styles.sqliteBadgeStyle (),
-              children: "SQLite on Bun"
-            }
-          ]
-        },
-        html.h1 {
-          style: styles.titleStyle (),
-          children: "Seseragi Todo"
-        },
-        html.p {
-          style: styles.leadStyle (),
-          children: "The server reads SQLite before rendering this page. The browser then hydrates the same pure Html tree and sends Todo mutations back through Seseragi HTTP."
-        },
-        todoView todos ""
-      ]
-    }
+    children: content todos
   }
+
+pub fn renderBody path: String -> todos: Array<Todo> -> String =
+  html.renderToString (body path todos)
