@@ -2,10 +2,13 @@ import * as html from "std/web/html"
 import { Todo, view as todoView } from "ui"
 import * as styles from "./styles"
 
-fn ignoreDraft _value: String -> Unit = ()
-fn ignoreTodo _id: Int -> Unit = ()
+type ServerAction =
+  | Noop
 
-pub fn body _path: String -> todos: Array<Todo> -> html.Html<Unit> =
+fn ignoreDraft _value: String -> ServerAction = Noop
+fn ignoreTodo _id: Int -> ServerAction = Noop
+
+pub fn body _path: String -> todos: Array<Todo> -> html.Html<ServerAction> =
   html.body {
     style: styles.pageStyle (),
     children: html.main {
@@ -32,7 +35,7 @@ pub fn body _path: String -> todos: Array<Todo> -> html.Html<Unit> =
           style: styles.leadStyle (),
           children: "The server reads SQLite before rendering this page. The browser hydrates only the interactive Todo island and sends mutations back through Seseragi HTTP."
         },
-        todoView ignoreDraft () ignoreTodo ignoreTodo todos ""
+        todoView ignoreDraft Noop ignoreTodo ignoreTodo todos ""
       ]
     }
   }
