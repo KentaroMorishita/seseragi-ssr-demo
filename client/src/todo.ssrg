@@ -128,14 +128,13 @@ fn dispatchAction client: http.HttpClient
   -> draft: MutableSignal<String>
   -> action: Action
   -> Effect<{}, String, Unit> =
-  let effect =
-    match action {
-      DraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
-      AddTodo -> applyAdd origin todos draft
-      ToggleTodo id -> applyToggle origin todos id
-      DeleteTodo id -> applyDelete origin todos id
-    }
-  provideHttp client effect
+  match action {
+    DraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
+    AddTodo -> applyAdd origin todos draft
+    ToggleTodo id -> applyToggle origin todos id
+    DeleteTodo id -> applyDelete origin todos id
+  }
+  |> provideHttp client
 
 pub effect fn run -> Unit
 with dom: dom.Dom, httpClient: http.HttpClient, navigation: navigation.Navigation
