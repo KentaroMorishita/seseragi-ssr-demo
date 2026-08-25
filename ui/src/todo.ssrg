@@ -14,8 +14,8 @@ fn todoTitleStyle todo: Todo -> html.Style =
   if todo.completed then styles.completedTitleStyle () else styles.todoTitleStyle ()
 
 fn todoItem<Action>
-  toggleTodo: Int -> Action
-  -> deleteTodo: Int -> Action
+  toggleTodo: (Int -> Action)
+  -> deleteTodo: (Int -> Action)
   -> todo: Todo
   -> html.Html<Action> =
   html.li {
@@ -41,22 +41,22 @@ fn todoItem<Action>
   }
 
 pub fn listItems<Action>
-  toggleTodo: Int -> Action
-  -> deleteTodo: Int -> Action
+  toggleTodo: (Int -> Action)
+  -> deleteTodo: (Int -> Action)
   -> todos: Array<Todo>
   -> Array<html.Html<Action>> =
   map (todoItem toggleTodo deleteTodo) todos
 
 pub fn listContent<Action>
-  toggleTodo: Int -> Action
-  -> deleteTodo: Int -> Action
+  toggleTodo: (Int -> Action)
+  -> deleteTodo: (Int -> Action)
   -> todos: Array<Todo>
   -> html.Html<Action> =
   html.fragment (listItems toggleTodo deleteTodo todos)
 
 pub fn list<Action>
-  toggleTodo: Int -> Action
-  -> deleteTodo: Int -> Action
+  toggleTodo: (Int -> Action)
+  -> deleteTodo: (Int -> Action)
   -> todos: Array<Todo>
   -> html.Html<Action> =
   html.ul {
@@ -66,7 +66,7 @@ pub fn list<Action>
   }
 
 fn composer<Action>
-  draftChanged: String -> Action
+  draftChanged: (String -> Action)
   -> addTodo: Action
   -> draft: String
   -> html.Html<Action> =
@@ -92,10 +92,10 @@ fn composer<Action>
   }
 
 pub fn islandChildren<Action>
-  draftChanged: String -> Action
+  draftChanged: (String -> Action)
   -> addTodo: Action
-  -> toggleTodo: Int -> Action
-  -> deleteTodo: Int -> Action
+  -> toggleTodo: (Int -> Action)
+  -> deleteTodo: (Int -> Action)
   -> todos: Array<Todo>
   -> draft: String
   -> Array<html.Html<Action>> =
@@ -105,20 +105,20 @@ pub fn islandChildren<Action>
   ]
 
 pub fn islandContent<Action>
-  draftChanged: String -> Action
+  draftChanged: (String -> Action)
   -> addTodo: Action
-  -> toggleTodo: Int -> Action
-  -> deleteTodo: Int -> Action
+  -> toggleTodo: (Int -> Action)
+  -> deleteTodo: (Int -> Action)
   -> todos: Array<Todo>
   -> draft: String
   -> html.Html<Action> =
   html.fragment (islandChildren draftChanged addTodo toggleTodo deleteTodo todos draft)
 
 pub fn island<Action>
-  draftChanged: String -> Action
+  draftChanged: (String -> Action)
   -> addTodo: Action
-  -> toggleTodo: Int -> Action
-  -> deleteTodo: Int -> Action
+  -> toggleTodo: (Int -> Action)
+  -> deleteTodo: (Int -> Action)
   -> todos: Array<Todo>
   -> draft: String
   -> html.Html<Action> =
@@ -128,10 +128,10 @@ pub fn island<Action>
   }
 
 pub fn view<Action>
-  draftChanged: String -> Action
+  draftChanged: (String -> Action)
   -> addTodo: Action
-  -> toggleTodo: Int -> Action
-  -> deleteTodo: Int -> Action
+  -> toggleTodo: (Int -> Action)
+  -> deleteTodo: (Int -> Action)
   -> todos: Array<Todo>
   -> draft: String
   -> html.Html<Action> =
