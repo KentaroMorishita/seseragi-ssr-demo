@@ -52,8 +52,11 @@ fn content todos: Array<Todo> -> html.Html<ServerAction> =
     ]
   }
 
-pub fn body _path: String -> todos: Array<Todo> -> html.Html<ServerAction> =
+fn body _path: String -> todos: Array<Todo> -> html.Html<ServerAction> =
   html.body {
     style: styles.pageStyle (),
     children: content todos
   }
+
+pub fn renderBody path: String -> todos: Array<Todo> -> String =
+  html.renderToString (body path todos)
