@@ -1,48 +1,56 @@
-import { chromium } from "playwright"
+import { chromium, webkit, type BrowserType } from "playwright"
 
 const baseUrl = process.env.TODO_BASE_URL ?? "http://127.0.0.1:8080"
-const browser = await chromium.launch({ headless: true })
 
-try {
-  const page = await browser.newPage()
-  const consoleErrors: string[] = []
-  const pageErrors: string[] = []
+const browsers: Array<{ name: string; type: BrowserType }> = [
+  { name: "chromium", type: chromium },
+  { name: "webkit", type: webkit },
+]
 
-  page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text())
-  })
-  page.on("pageerror", (error) => pageErrors.push(error.stack ?? error.message))
+for (const candidate of browsers) {
+  const browser = await candidate.type.launch({ headless: true })
 
-  await page.goto(baseUrl, { waitUntil: "networkidle" })
-  await page.waitForFunction(() => document.documentElement.dataset.seseragiStatus === "mounted")
+  try {
+    const page = await browser.newPage()
+    const consoleErrors: string[] = []
+    const pageErrors: string[] = []
 
-  const root = page.locator("#todo-interactive")
-  await root.waitFor()
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text())
+    })
+    page.on("pageerror", (error) => pageErrors.push(error.stack ?? error.message))
 
-  const title = `Browser Todo ${Date.now()}`
-  const input = root.locator("#todo-input")
-  await input.fill(title)
-  await root.locator("form button[type=submit]").click()
+    await page.goto(baseUrl, { waitUntil: "networkidle" })
+    await page.waitForFunction(() => document.documentElement.dataset.seseragiStatus === "mounted")
 
-  let row = root.locator("#todo-list li").filter({ hasText: title })
-  await row.waitFor()
+    const root = page.locator("#todo-interactive")
+    await root.waitFor()
 
-  await row.getByRole("button", { name: "Open" }).click()
-  row = root.locator("#todo-list li").filter({ hasText: title })
-  await row.getByRole("button", { name: "Done" }).waitFor()
+    const title = `${candidate.name} Todo ${Date.now()}`
+    const input = root.locator("#todo-input")
+    await input.fill(title)
+    await root.locator("form button[type=submit]").click()
 
-  await row.getByRole("button", { name: "Delete" }).click()
-  await page.waitForFunction(
-    (todoTitle) => ![...document.querySelectorAll("#todo-list li")].some((item) => item.textContent?.includes(todoTitle)),
-    title,
-  )
+    let row = root.locator("#todo-list li").filter({ hasText: title })
+    await row.waitFor()
 
-  const status = await page.evaluate(() => document.documentElement.dataset.seseragiStatus)
-  if (status !== "mounted") throw new Error(`Seseragi browser status changed to ${status}`)
-  if (consoleErrors.length > 0) throw new Error(`browser console errors:\n${consoleErrors.join("\n")}`)
-  if (pageErrors.length > 0) throw new Error(`browser page errors:\n${pageErrors.join("\n")}`)
+    await row.getByRole("button", { name: "Open" }).click()
+    row = root.locator("#todo-list li").filter({ hasText: title })
+    await row.getByRole("button", { name: "Done" }).waitFor()
 
-  console.log("Todo browser smoke passed: hydrate -> add -> toggle -> delete")
-} finally {
-  await browser.close()
+    await row.getByRole("button", { name: "Delete" }).click()
+    await page.waitForFunction(
+      (todoTitle) => ![...document.querySelectorAll("#todo-list li")].some((item) => item.textContent?.includes(todoTitle)),
+      title,
+    )
+
+    const status = await page.evaluate(() => document.documentElement.dataset.seseragiStatus)
+    if (status !== "mounted") throw new Error(`Seseragi browser status changed to ${status}`)
+    if (consoleErrors.length > 0) throw new Error(`${candidate.name} console errors:\n${consoleErrors.join("\n")}`)
+    if (pageErrors.length > 0) throw new Error(`${candidate.name} page errors:\n${pageErrors.join("\n")}`)
+
+    console.log(`${candidate.name} Todo smoke passed: hydrate -> add -> toggle -> delete`)
+  } finally {
+    await browser.close()
+  }
 }
