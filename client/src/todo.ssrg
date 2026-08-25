@@ -1,6 +1,5 @@
 import * as dom from "std/web/dom"
 import * as effects from "std/effect"
-import * as html from "std/web/html"
 import * as http from "std/http"
 import * as navigation from "std/web/navigation"
 import * as signals from "std/signal"
@@ -13,8 +12,8 @@ import {
   DraftChanged,
   Todo,
   ToggleTodo,
-  islandChildren,
-  listItems,
+  islandContent,
+  listContent,
 } from "ui"
 import * as api from "./api"
 
@@ -43,7 +42,7 @@ fn navigationFailure error: navigation.NavigationError -> String =
   navigation.errorMessage error
 
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
-  dom.content (html.fragment (listItems todos)) []
+  dom.content (listContent todos) []
 
 fn httpClientService
   -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
@@ -143,7 +142,7 @@ fails String =
       dom.bindValue "#todo-input" draft,
       dom.bindRegion "#todo-list" listRegion
     ]
-    let reactive = dom.content (html.fragment (islandChildren initial "")) bindings
+    let reactive = dom.content (islandContent initial "") bindings
 
     target <- dom.query "#todo-interactive"
       |> effects.mapError domQueryFailure
