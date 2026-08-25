@@ -1,6 +1,11 @@
+import { $ } from "bun"
 import { chromium, webkit, type BrowserType } from "playwright"
 
 const baseUrl = process.env.TODO_BASE_URL ?? "http://127.0.0.1:8080"
+
+if (process.env.CI) {
+  await $`cd tests && bunx playwright install --with-deps webkit`
+}
 
 const browsers: Array<{ name: string; type: BrowserType }> = [
   { name: "chromium", type: chromium },
