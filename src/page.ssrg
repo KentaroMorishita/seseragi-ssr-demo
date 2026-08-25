@@ -29,10 +29,7 @@ pub fn body _path: String -> todos: Array<Todo> -> html.Html<Action> =
           style: styles.leadStyle (),
           children: "The server reads SQLite before rendering this page. The browser then hydrates the same pure Html tree and sends Todo mutations back through Seseragi HTTP."
         },
-        html.div {
-          id: "todo-root",
-          children: [todoView todos ""]
-        }
+        todoView todos ""
       ]
     }
   }
