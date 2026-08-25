@@ -4,11 +4,42 @@ const port = Number(process.env.PORT ?? "8080")
 const app = Bun.spawn(["bun", "generated/entry.ts"], {
   cwd: process.cwd(),
   env: process.env,
-  stdout: "inherit",
-  stderr: "inherit",
+  stdout: "pipe",
+  stderr: "pipe",
+})
+
+let childStdout = ""
+let childStderr = ""
+
+void capture(app.stdout, (text) => {
+  childStdout = tail(childStdout + text)
+})
+
+void capture(app.stderr, (text) => {
+  childStderr = tail(childStderr + text)
 })
 
 const client = Bun.file("client-dist/assets/app.js")
+
+async function capture(
+  stream: ReadableStream<Uint8Array>,
+  append: (text: string) => void
+): Promise<void> {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    append(decoder.decode(value, { stream: true }))
+  }
+
+  append(decoder.decode())
+}
+
+function tail(text: string): string {
+  return text.length <= 2000 ? text : text.slice(-2000)
+}
 
 async function proxy(request: Request): Promise<Response> {
   const incoming = new URL(request.url)
@@ -24,8 +55,21 @@ async function proxy(request: Request): Promise<Response> {
     }
   }
 
-  console.error("Seseragi server did not become ready", lastError)
-  return new Response("Seseragi server unavailable", { status: 503 })
+  const exited = app.exitCode !== null
+  const detail = [
+    `child=${exited ? `exited:${app.exitCode}` : "running"}`,
+    `proxy=${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    childStderr ? `stderr=${childStderr}` : "",
+    childStdout ? `stdout=${childStdout}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
+
+  console.error("Seseragi server did not become ready", detail)
+  return new Response(`Seseragi server unavailable\n${detail}`, {
+    status: 503,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  })
 }
 
 Bun.serve({
