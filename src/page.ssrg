@@ -42,7 +42,10 @@ pub fn body path: String -> todos: Array<Todo> -> html.Html<Action> =
             }
           ]
         },
-        todoView todos ""
+        html.div {
+          id: "todo-root",
+          children: todoView todos ""
+        }
       ]
     }
   }
