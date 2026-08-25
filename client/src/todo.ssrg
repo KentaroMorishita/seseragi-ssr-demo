@@ -5,7 +5,7 @@ import * as navigation from "std/web/navigation"
 import * as signals from "std/signal"
 import { DomOptions } from "std/web/dom"
 import { MutableSignal } from "std/signal"
-import { Todo, TodoActions, islandContent, listContent } from "ui"
+import { Todo, islandContent, listContent } from "ui"
 import * as api from "./api"
 
 type Action =
@@ -17,13 +17,6 @@ type Action =
 struct DraftCommand {
   value: String,
   draft: MutableSignal<String>,
-}
-
-let actions = TodoActions<Action> {
-  draftChanged: DraftChanged,
-  addTodo: AddTodo,
-  toggleTodo: ToggleTodo,
-  deleteTodo: DeleteTodo,
 }
 
 let defaultDomOptions = dom.defaultOptions ()
@@ -46,7 +39,7 @@ fn navigationFailure error: navigation.NavigationError -> String =
   navigation.errorMessage error
 
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
-  dom.content (listContent actions todos) []
+  dom.content (listContent ToggleTodo DeleteTodo todos) []
 
 fn httpClientService
   -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
@@ -150,7 +143,9 @@ fails String =
       dom.bindValue "#todo-input" draft,
       dom.bindRegion "#todo-list" listRegion
     ]
-    let reactive = dom.content (islandContent actions initial "") bindings
+    let reactive = dom.content
+      (islandContent DraftChanged AddTodo ToggleTodo DeleteTodo initial "")
+      bindings
 
     target <- dom.query "#todo-interactive"
       |> effects.mapError domQueryFailure
