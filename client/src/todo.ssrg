@@ -254,7 +254,7 @@ fails String =
     ]
     let reactive = dom.content (todoView initial "") bindings
 
-    target <- dom.query "#todo-app"
+    target <- dom.query "#todo-root"
       |> effects.mapError domQueryFailure
 
     _ <- effects.fork (worker origin actions todos draft)
