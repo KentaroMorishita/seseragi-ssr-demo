@@ -22,7 +22,7 @@ struct DraftCommand {
 let defaultDomOptions = dom.defaultOptions ()
 let hydrationOptions: DomOptions = DomOptions {
   ...defaultDomOptions,
-  hydration: dom.HydrateStrict,
+  hydration: dom.HydrateOrReplace,
   cleanup: dom.PreserveRenderedDom
 }
 
