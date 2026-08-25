@@ -57,6 +57,13 @@ fn httpContext<A> value: A
   |> map (keepHttp value)
   |> effects.mapError neverFailure
 
+fn provideHttp<A> client: http.HttpClient
+  -> effect: Effect<{ httpClient: http.HttpClient }, String, A>
+  -> Effect<{}, String, A> =
+  effects.provideSome
+    (\_environment: {} -> { httpClient: client })
+    effect
+
 effect fn setDraft command: DraftCommand -> Unit
 with httpClient: http.HttpClient
 fails String =
@@ -115,17 +122,20 @@ fails String =
     signals.set next todos |> effects.mapError neverFailure
   }
 
-fn dispatchAction origin: String
+fn dispatchAction client: http.HttpClient
+  -> origin: String
   -> todos: MutableSignal<Array<Todo>>
   -> draft: MutableSignal<String>
   -> action: Action
-  -> Effect<{ httpClient: http.HttpClient }, String, Unit> =
-  match action {
-    DraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
-    AddTodo -> applyAdd origin todos draft
-    ToggleTodo id -> applyToggle origin todos id
-    DeleteTodo id -> applyDelete origin todos id
-  }
+  -> Effect<{}, String, Unit> =
+  let effect =
+    match action {
+      DraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
+      AddTodo -> applyAdd origin todos draft
+      ToggleTodo id -> applyToggle origin todos id
+      DeleteTodo id -> applyDelete origin todos id
+    }
+  provideHttp client effect
 
 pub effect fn run -> Unit
 with dom: dom.Dom, httpClient: http.HttpClient, navigation: navigation.Navigation
@@ -136,6 +146,7 @@ fails String =
     initial <- api.list origin
     todos <- signals.make initial |> effects.mapError neverFailure
     draft <- signals.make "" |> effects.mapError neverFailure
+    client <- httpClientService () |> effects.mapError neverFailure
 
     let listRegion = signals.map region todos
     let bindings: Array<dom.DomBinding<Action>> = [
@@ -147,6 +158,6 @@ fails String =
     target <- dom.query "#todo-interactive"
       |> effects.mapError domQueryFailure
 
-    dom.runContent hydrationOptions target (dispatchAction origin todos draft) reactive
+    dom.runContent hydrationOptions target (dispatchAction client origin todos draft) reactive
       |> effects.mapError domFailure
   }
