@@ -31,7 +31,7 @@ pub fn body _path: String -> todos: Array<Todo> -> html.Html<Action> =
         },
         html.div {
           id: "todo-root",
-          children: todoView todos ""
+          children: [todoView todos ""]
         }
       ]
     }
