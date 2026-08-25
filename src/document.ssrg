@@ -1,9 +1,8 @@
-import * as html from "std/web/html"
 import { Todo } from "ui"
-import { body } from "./page"
+import { renderBody } from "./page"
 
 let documentHead =
   "<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"><title>Seseragi Todo</title></head>"
 
 pub fn render path: String -> todos: Array<Todo> -> String =
-  `<!doctype html><html lang="en">${documentHead}${html.renderToString (body path todos)}<script type="module" src="/client.js"></script></html>`
+  `<!doctype html><html lang="en">${documentHead}${renderBody path todos}<script type="module" src="/client.js"></script></html>`
