@@ -45,6 +45,9 @@ fn todoItem todo: Todo -> html.Html<Action> =
 pub fn listItems todos: Array<Todo> -> Array<html.Html<Action>> =
   map todoItem todos
 
+pub fn listContent todos: Array<Todo> -> html.Html<Action> =
+  html.fragment (listItems todos)
+
 pub fn list todos: Array<Todo> -> html.Html<Action> =
   html.ul {
     id: "todo-list",
@@ -79,6 +82,9 @@ pub fn islandChildren todos: Array<Todo> -> draft: String -> Array<html.Html<Act
     composer draft,
     list todos
   ]
+
+pub fn islandContent todos: Array<Todo> -> draft: String -> html.Html<Action> =
+  html.fragment (islandChildren todos draft)
 
 pub fn island todos: Array<Todo> -> draft: String -> html.Html<Action> =
   html.div {
