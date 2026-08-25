@@ -1,13 +1,9 @@
 import * as html from "std/web/html"
-import { Todo, TodoActions, view as todoView } from "ui"
+import { Todo, view as todoView } from "ui"
 import * as styles from "./styles"
 
-let serverActions = TodoActions<Unit> {
-  draftChanged: \_value -> (),
-  addTodo: (),
-  toggleTodo: \_id -> (),
-  deleteTodo: \_id -> (),
-}
+fn ignoreDraft _value: String -> Unit = ()
+fn ignoreTodo _id: Int -> Unit = ()
 
 pub fn body _path: String -> todos: Array<Todo> -> html.Html<Unit> =
   html.body {
@@ -36,7 +32,7 @@ pub fn body _path: String -> todos: Array<Todo> -> html.Html<Unit> =
           style: styles.leadStyle (),
           children: "The server reads SQLite before rendering this page. The browser hydrates only the interactive Todo island and sends mutations back through Seseragi HTTP."
         },
-        todoView serverActions todos ""
+        todoView ignoreDraft () ignoreTodo ignoreTodo todos ""
       ]
     }
   }
