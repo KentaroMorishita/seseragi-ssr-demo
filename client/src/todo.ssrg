@@ -143,9 +143,7 @@ fails String =
       dom.bindValue "#todo-input" draft,
       dom.bindRegion "#todo-list" listRegion
     ]
-    let reactive = dom.content
-      (islandContent DraftChanged AddTodo ToggleTodo DeleteTodo initial "")
-      bindings
+    let reactive = dom.content (islandContent DraftChanged AddTodo ToggleTodo DeleteTodo initial "") bindings
 
     target <- dom.query "#todo-interactive"
       |> effects.mapError domQueryFailure
