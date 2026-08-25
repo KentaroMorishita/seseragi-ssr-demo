@@ -2,7 +2,7 @@ import * as html from "std/web/html"
 import { Action, Todo, view as todoView } from "ui"
 import * as styles from "./styles"
 
-pub fn body path: String -> todos: Array<Todo> -> html.Html<Action> =
+pub fn body _path: String -> todos: Array<Todo> -> html.Html<Action> =
   html.body {
     style: styles.pageStyle (),
     children: html.main {
@@ -28,19 +28,6 @@ pub fn body path: String -> todos: Array<Todo> -> html.Html<Action> =
         html.p {
           style: styles.leadStyle (),
           children: "The server reads SQLite before rendering this page. The browser then hydrates the same pure Html tree and sends Todo mutations back through Seseragi HTTP."
-        },
-        html.section {
-          style: styles.cardStyle (),
-          children: [
-            html.p {
-              style: styles.labelStyle (),
-              children: "SSR request path"
-            },
-            html.p {
-              style: styles.pathStyle (),
-              children: path
-            }
-          ]
         },
         html.div {
           id: "todo-root",
