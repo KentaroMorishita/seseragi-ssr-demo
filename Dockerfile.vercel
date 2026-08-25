@@ -3,6 +3,7 @@ FROM oven/bun:1
 WORKDIR /app
 
 COPY generated ./generated
+COPY vercel-runtime ./generated/node_modules/@seseragi
 COPY client-dist ./client-dist
 COPY container ./container
 
