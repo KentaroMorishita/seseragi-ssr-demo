@@ -8,18 +8,24 @@ type ServerAction =
 fn ignoreDraft _value: String -> ServerAction = Noop
 fn ignoreTodo _id: Int -> ServerAction = Noop
 
+fn ssrBadge -> html.Html<ServerAction> =
+  html.span {
+    style: styles.badgeStyle (),
+    children: "SSR + Hydration"
+  }
+
+fn sqliteBadge -> html.Html<ServerAction> =
+  html.span {
+    style: styles.sqliteBadgeStyle (),
+    children: "SQLite on Bun"
+  }
+
 fn badges -> html.Html<ServerAction> =
   html.div {
     style: styles.badgeRowStyle (),
     children: [
-      html.span {
-        style: styles.badgeStyle (),
-        children: "SSR + Hydration"
-      },
-      html.span {
-        style: styles.sqliteBadgeStyle (),
-        children: "SQLite on Bun"
-      }
+      ssrBadge (),
+      sqliteBadge ()
     ]
   }
 
