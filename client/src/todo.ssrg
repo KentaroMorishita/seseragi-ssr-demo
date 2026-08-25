@@ -80,62 +80,65 @@ fn todoList todos: Array<Todo> -> html.Html<Action> =
     children: map todoItem todos
   }
 
+fn todoChildren todos: Array<Todo> -> draft: String -> Array<html.Html<Action>> =
+  [
+    html.div {
+      style: styles.todoHeaderStyle (),
+      children: [
+        html.div {
+          children: [
+            html.p {
+              style: styles.labelStyle (),
+              children: "SQLite-backed interaction"
+            },
+            html.h2 {
+              style: styles.todoHeadingStyle (),
+              children: "Things to do"
+            }
+          ]
+        },
+        html.span {
+          style: styles.databaseBadgeStyle (),
+          children: "SQLite"
+        }
+      ]
+    },
+    html.p {
+      style: styles.descriptionStyle (),
+      children: "The initial list is read from SQLite during SSR. After hydration, mutations go through the Seseragi HTTP server and the list region updates reactively."
+    },
+    html.div {
+      style: styles.composerStyle (),
+      children: [
+        html.input {
+          id: "todo-input",
+          inputType: "text",
+          value: draft,
+          placeholder: "Add a task",
+          autoComplete: "off",
+          style: styles.inputStyle (),
+          onInput: \event -> ClientDraftChanged event.value
+        },
+        html.button {
+          buttonType: "button",
+          style: styles.addButtonStyle (),
+          onClick: ClientAddTodo,
+          children: "Add"
+        }
+      ]
+    },
+    todoList todos,
+    html.p {
+      style: styles.noteStyle (),
+      children: "Ephemeral container SQLite · data may reset when the deployment or instance restarts."
+    }
+  ]
+
 fn todoView todos: Array<Todo> -> draft: String -> html.Html<Action> =
   html.section {
     id: "todo-app",
     style: styles.todoCardStyle (),
-    children: [
-      html.div {
-        style: styles.todoHeaderStyle (),
-        children: [
-          html.div {
-            children: [
-              html.p {
-                style: styles.labelStyle (),
-                children: "SQLite-backed interaction"
-              },
-              html.h2 {
-                style: styles.todoHeadingStyle (),
-                children: "Things to do"
-              }
-            ]
-          },
-          html.span {
-            style: styles.databaseBadgeStyle (),
-            children: "SQLite"
-          }
-        ]
-      },
-      html.p {
-        style: styles.descriptionStyle (),
-        children: "The initial list is read from SQLite during SSR. After hydration, mutations go through the Seseragi HTTP server and the list region updates reactively."
-      },
-      html.div {
-        style: styles.composerStyle (),
-        children: [
-          html.input {
-            id: "todo-input",
-            inputType: "text",
-            value: draft,
-            placeholder: "Add a task",
-            autoComplete: "off",
-            style: styles.inputStyle (),
-            onInput: \event -> ClientDraftChanged event.value
-          },
-          html.button {
-            buttonType: "button",
-            style: styles.addButtonStyle (),
-            onClick: ClientAddTodo,
-            children: "Add"
-          }
-        ]
-      },
-      todoList todos,
-      html.p {
-        style: styles.noteStyle (),
-        children: "Ephemeral container SQLite · data may reset when the deployment or instance restarts."
-      }
-    ]
+    children: todoChildren todos draft
   }
 
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
@@ -252,9 +255,9 @@ fails String =
       dom.bindValue "#todo-input" draft,
       dom.bindRegion "#todo-list" listRegion
     ]
-    let reactive = dom.content (todoView initial "") bindings
+    let reactive = dom.content (html.fragment (todoChildren initial "")) bindings
 
-    target <- dom.query "#todo-root"
+    target <- dom.query "#todo-app"
       |> effects.mapError domQueryFailure
 
     _ <- effects.fork (worker origin actions todos draft)
