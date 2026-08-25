@@ -200,6 +200,21 @@ jobs:
           grep -q 'todo-app' client-dist/assets/app.js
           grep -q 'todo-list' client-dist/assets/app.js
 
+      - name: Stage generated dependencies for Vercel upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf vercel-node-modules
+          test -d generated/node_modules/@seseragi/runtime
+          test -d generated/node_modules/seseragi
+          mkdir -p vercel-node-modules
+          cp -R generated/node_modules/. vercel-node-modules/
+          test -f vercel-node-modules/@seseragi/runtime/src/effect.ts
+
+          # Vercel excludes every node_modules directory from source uploads.
+          # Remove it here too so the container test proves the staged copy is sufficient.
+          rm -rf generated/node_modules
+
       - name: Build Vercel container image
         run: docker build -f Dockerfile.vercel -t seseragi-ssr-demo:test .
 
