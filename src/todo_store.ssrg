@@ -20,16 +20,14 @@ fn todosStatement -> Statement =
     "select id, title, completed from todos order by id desc"
     (sqlite.emptyValues ())
 
-fn todoStart id: Int -> title: String -> (Bool -> Todo) =
-  \completed -> Todo { id: id, title: title, completed: completed }
-
-fn finishTodo build: (Bool -> Todo) -> completed: Bool -> Todo =
-  build completed
+fn todo id: Int -> title: String -> completed: Bool -> Todo =
+  Todo { id: id, title: title, completed: completed }
 
 fn todoDecoder -> sqlite.Decoder<Todo> =
-  sqlite.map2 finishTodo
-    (sqlite.map2 todoStart (sqlite.int "id") (sqlite.string "title"))
-    (sqlite.bool "completed")
+  todo
+  <$> sqlite.int "id"
+  <*> sqlite.string "title"
+  <*> sqlite.bool "completed"
 
 pub fn succeed<A> value: A
   -> Effect<{ sqlite: sqlite.Sqlite }, String, A> =
