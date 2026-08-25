@@ -7,27 +7,24 @@ pub struct Todo {
   completed: Bool,
 }
 
-pub struct TodoActions<Action> {
-  draftChanged: String -> Action,
-  addTodo: Action,
-  toggleTodo: Int -> Action,
-  deleteTodo: Int -> Action,
-}
-
 fn statusText todo: Todo -> String =
   if todo.completed then "Done" else "Open"
 
 fn todoTitleStyle todo: Todo -> html.Style =
   if todo.completed then styles.completedTitleStyle () else styles.todoTitleStyle ()
 
-fn todoItem<Action> actions: TodoActions<Action> -> todo: Todo -> html.Html<Action> =
+fn todoItem<Action>
+  toggleTodo: Int -> Action
+  -> deleteTodo: Int -> Action
+  -> todo: Todo
+  -> html.Html<Action> =
   html.li {
     style: styles.todoItemStyle (),
     children: [
       html.button {
         buttonType: "button",
         style: styles.toggleButtonStyle todo.completed,
-        onClick: actions.toggleTodo todo.id,
+        onClick: toggleTodo todo.id,
         children: statusText todo
       },
       html.p {
@@ -37,37 +34,45 @@ fn todoItem<Action> actions: TodoActions<Action> -> todo: Todo -> html.Html<Acti
       html.button {
         buttonType: "button",
         style: styles.deleteButtonStyle (),
-        onClick: actions.deleteTodo todo.id,
+        onClick: deleteTodo todo.id,
         children: "Delete"
       }
     ]
   }
 
-pub fn listItems<Action> actions: TodoActions<Action>
+pub fn listItems<Action>
+  toggleTodo: Int -> Action
+  -> deleteTodo: Int -> Action
   -> todos: Array<Todo>
   -> Array<html.Html<Action>> =
-  map (todoItem actions) todos
+  map (todoItem toggleTodo deleteTodo) todos
 
-pub fn listContent<Action> actions: TodoActions<Action>
+pub fn listContent<Action>
+  toggleTodo: Int -> Action
+  -> deleteTodo: Int -> Action
   -> todos: Array<Todo>
   -> html.Html<Action> =
-  html.fragment (listItems actions todos)
+  html.fragment (listItems toggleTodo deleteTodo todos)
 
-pub fn list<Action> actions: TodoActions<Action>
+pub fn list<Action>
+  toggleTodo: Int -> Action
+  -> deleteTodo: Int -> Action
   -> todos: Array<Todo>
   -> html.Html<Action> =
   html.ul {
     id: "todo-list",
     style: styles.todoListStyle (),
-    children: listItems actions todos
+    children: listItems toggleTodo deleteTodo todos
   }
 
-fn composer<Action> actions: TodoActions<Action>
+fn composer<Action>
+  draftChanged: String -> Action
+  -> addTodo: Action
   -> draft: String
   -> html.Html<Action> =
   html.form {
     style: styles.composerStyle (),
-    onSubmit: actions.addTodo,
+    onSubmit: addTodo,
     children: [
       html.input {
         id: "todo-input",
@@ -76,7 +81,7 @@ fn composer<Action> actions: TodoActions<Action>
         placeholder: "Add a task",
         autoComplete: "off",
         style: styles.inputStyle (),
-        onInput: \event -> actions.draftChanged event.value
+        onInput: \event -> draftChanged event.value
       },
       html.button {
         buttonType: "submit",
@@ -86,31 +91,47 @@ fn composer<Action> actions: TodoActions<Action>
     ]
   }
 
-pub fn islandChildren<Action> actions: TodoActions<Action>
+pub fn islandChildren<Action>
+  draftChanged: String -> Action
+  -> addTodo: Action
+  -> toggleTodo: Int -> Action
+  -> deleteTodo: Int -> Action
   -> todos: Array<Todo>
   -> draft: String
   -> Array<html.Html<Action>> =
   [
-    composer actions draft,
-    list actions todos
+    composer draftChanged addTodo draft,
+    list toggleTodo deleteTodo todos
   ]
 
-pub fn islandContent<Action> actions: TodoActions<Action>
+pub fn islandContent<Action>
+  draftChanged: String -> Action
+  -> addTodo: Action
+  -> toggleTodo: Int -> Action
+  -> deleteTodo: Int -> Action
   -> todos: Array<Todo>
   -> draft: String
   -> html.Html<Action> =
-  html.fragment (islandChildren actions todos draft)
+  html.fragment (islandChildren draftChanged addTodo toggleTodo deleteTodo todos draft)
 
-pub fn island<Action> actions: TodoActions<Action>
+pub fn island<Action>
+  draftChanged: String -> Action
+  -> addTodo: Action
+  -> toggleTodo: Int -> Action
+  -> deleteTodo: Int -> Action
   -> todos: Array<Todo>
   -> draft: String
   -> html.Html<Action> =
   html.div {
     id: "todo-interactive",
-    children: islandChildren actions todos draft
+    children: islandChildren draftChanged addTodo toggleTodo deleteTodo todos draft
   }
 
-pub fn view<Action> actions: TodoActions<Action>
+pub fn view<Action>
+  draftChanged: String -> Action
+  -> addTodo: Action
+  -> toggleTodo: Int -> Action
+  -> deleteTodo: Int -> Action
   -> todos: Array<Todo>
   -> draft: String
   -> html.Html<Action> =
@@ -143,7 +164,7 @@ pub fn view<Action> actions: TodoActions<Action>
         style: styles.descriptionStyle (),
         children: "The initial list is read from SQLite during SSR. After hydration, mutations go through the Seseragi HTTP server and the list region updates reactively."
       },
-      island actions todos draft,
+      island draftChanged addTodo toggleTodo deleteTodo todos draft,
       html.p {
         style: styles.noteStyle (),
         children: "Ephemeral container SQLite · data may reset when the deployment or instance restarts."
