@@ -3,7 +3,6 @@ import * as effects from "std/effect"
 import * as html from "std/web/html"
 import * as http from "std/http"
 import * as navigation from "std/web/navigation"
-import * as queue from "std/queue"
 import * as signals from "std/signal"
 import { DomOptions } from "std/web/dom"
 import { MutableSignal } from "std/signal"
@@ -28,9 +27,6 @@ let hydrationOptions: DomOptions = DomOptions {
   hydration: dom.HydrateStrict,
   cleanup: dom.PreserveRenderedDom
 }
-
-fn queueFailure _error: queue.QueueClosed -> String =
-  "Todo action queue closed"
 
 fn neverFailure _error: Never -> String =
   "unreachable"
@@ -144,12 +140,6 @@ fn todoView todos: Array<Todo> -> draft: String -> html.Html<Action> =
 fn region todos: Array<Todo> -> dom.DomContent<Action> =
   dom.content (html.fragment (map todoItem todos)) []
 
-fn dispatch actions: queue.Queue<Action>
-  -> action: Action
-  -> Effect<{}, String, Unit> =
-  queue.offer action actions
-  |> effects.mapError queueFailure
-
 fn httpClientService
   -> Effect<{ httpClient: http.HttpClient }, Never, http.HttpClient> =
   effects.service (\environment: { httpClient: http.HttpClient } -> environment.httpClient)
@@ -221,22 +211,16 @@ fails String =
     signals.set next todos |> effects.mapError neverFailure
   }
 
-pub effect fn worker origin: String
-  -> actions: queue.Queue<Action>
+fn dispatchAction origin: String
   -> todos: MutableSignal<Array<Todo>>
   -> draft: MutableSignal<String>
-  -> Unit
-with httpClient: http.HttpClient
-fails String =
-  do {
-    action <- queue.take actions |> effects.mapError queueFailure
-    _ <- match action {
-      ClientDraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
-      ClientAddTodo -> applyAdd origin todos draft
-      ClientToggleTodo id -> applyToggle origin todos id
-      ClientDeleteTodo id -> applyDelete origin todos id
-    }
-    worker origin actions todos draft
+  -> action: Action
+  -> Effect<{ httpClient: http.HttpClient }, String, Unit> =
+  match action {
+    ClientDraftChanged value -> setDraft (DraftCommand { value: value, draft: draft })
+    ClientAddTodo -> applyAdd origin todos draft
+    ClientToggleTodo id -> applyToggle origin todos id
+    ClientDeleteTodo id -> applyDelete origin todos id
   }
 
 pub effect fn run -> Unit
@@ -248,7 +232,6 @@ fails String =
     initial <- api.list origin
     todos <- signals.make initial |> effects.mapError neverFailure
     draft <- signals.make "" |> effects.mapError neverFailure
-    actions <- queue.unbounded<Action> () |> effects.mapError neverFailure
 
     let listRegion = signals.map region todos
     let bindings: Array<dom.DomBinding<Action>> = [
@@ -260,9 +243,6 @@ fails String =
     target <- dom.query "#todo-app"
       |> effects.mapError domQueryFailure
 
-    _ <- effects.fork (worker origin actions todos draft)
-      |> effects.mapError neverFailure
-
-    dom.runContent hydrationOptions target (dispatch actions) reactive
+    dom.runContent hydrationOptions target (dispatchAction origin todos draft) reactive
       |> effects.mapError domFailure
   }
