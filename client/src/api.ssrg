@@ -2,7 +2,7 @@ import * as effects from "std/effect"
 import * as http from "std/http"
 import * as json from "std/json"
 import * as text from "std/text"
-import { Todo } from "./model"
+import { Todo } from "ui"
 
 fn httpBuildFailure _error: http.HttpBuildError -> String = "Invalid Todo HTTP request"
 fn httpFailure _error: http.HttpError -> String = "Todo HTTP request failed"
