@@ -42,11 +42,48 @@ fn todoItem todo: Todo -> html.Html<Action> =
     ]
   }
 
+pub fn listItems todos: Array<Todo> -> Array<html.Html<Action>> =
+  map todoItem todos
+
 pub fn list todos: Array<Todo> -> html.Html<Action> =
   html.ul {
     id: "todo-list",
     style: styles.todoListStyle (),
-    children: map todoItem todos
+    children: listItems todos
+  }
+
+fn composer draft: String -> html.Html<Action> =
+  html.form {
+    style: styles.composerStyle (),
+    onSubmit: AddTodo,
+    children: [
+      html.input {
+        id: "todo-input",
+        inputType: "text",
+        value: draft,
+        placeholder: "Add a task",
+        autoComplete: "off",
+        style: styles.inputStyle (),
+        onInput: \event -> DraftChanged event.value
+      },
+      html.button {
+        buttonType: "submit",
+        style: styles.addButtonStyle (),
+        children: "Add"
+      }
+    ]
+  }
+
+pub fn islandChildren todos: Array<Todo> -> draft: String -> Array<html.Html<Action>> =
+  [
+    composer draft,
+    list todos
+  ]
+
+pub fn island todos: Array<Todo> -> draft: String -> html.Html<Action> =
+  html.div {
+    id: "todo-interactive",
+    children: islandChildren todos draft
   }
 
 pub fn view todos: Array<Todo> -> draft: String -> html.Html<Action> =
@@ -79,27 +116,7 @@ pub fn view todos: Array<Todo> -> draft: String -> html.Html<Action> =
         style: styles.descriptionStyle (),
         children: "The initial list is read from SQLite during SSR. After hydration, mutations go through the Seseragi HTTP server and the list region updates reactively."
       },
-      html.div {
-        style: styles.composerStyle (),
-        children: [
-          html.input {
-            id: "todo-input",
-            inputType: "text",
-            value: draft,
-            placeholder: "Add a task",
-            autoComplete: "off",
-            style: styles.inputStyle (),
-            onInput: \event -> DraftChanged event.value
-          },
-          html.button {
-            buttonType: "button",
-            style: styles.addButtonStyle (),
-            onClick: AddTodo,
-            children: "Add"
-          }
-        ]
-      },
-      list todos,
+      island todos draft,
       html.p {
         style: styles.noteStyle (),
         children: "Ephemeral container SQLite · data may reset when the deployment or instance restarts."
